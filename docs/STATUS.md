@@ -1,0 +1,61 @@
+# Project HORIZON Status
+
+The original source PDF was empty, so the implementation is based on the
+readable plain-text project prompt supplied during development.
+- Observed size: `143336` bytes
+- Last checked: 2026-06-17
+
+Current workspace contains the generated firmware, Calibration Wizard v4,
+Raspberry Pi dashboard, documentation, and static self-validation tooling.
+
+Project origin: Temasek Polytechnic, ENG West Wing Block 25A, Unit #03-22,
+Aviation Research Centre.
+
+Current flight controller firmware identity:
+
+- Version: `FC-0.8.0`
+- Revision: `2026-06-17.8`
+
+## Current hardware bring-up defaults
+
+- `BATTERY_MONITOR_ENABLED = false` in the flight controller because the A0 battery-divider hardware is not installed yet.
+- Battery telemetry remains available, but disabled monitoring reports `BVALID=0`, `BMON=0`, and does not trigger battery failsafe.
+- `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
+- Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
+- Flight controller and Calibration Wizard both use the archived PCB receiver map: CH1 roll D7, CH2 pitch D8, CH3 throttle D5, CH4 yaw D4.
+- Calibration Wizard RC setup now checks CH1-CH4 receiver health, captures neutral/safe positions, verifies stick directions one by one, and refuses to commit weak endpoint captures.
+- D13 is now a status LED. Flight firmware uses solid-on boot/armed, fast blink error/failsafe, double blink ready-to-arm, and slow heartbeat not-ready. Calibration Wizard uses solid-on boot/busy and slow heartbeat at the menu.
+- Flight firmware arming/disarming now follows the archived controller logic: throttle low + yaw right arms after `150 ms`, throttle low + yaw left disarms after `150 ms`, and a re-arm neutral latch is required after failsafe.
+- Flight firmware now swaps and inverts MPU6050 roll/pitch axes to match the current board orientation, and `EVT:ARM_DENIED` includes raw `THR_US` and `YAW_US` diagnostics.
+- Flight firmware now captures the physical CH6 kill switch on D12/PCINT4. CH6 above `1800 us` latches kill/failsafe with reason `CH6_KILL`; CH6 below `1100 us` plus throttle-low/yaw-centered releases the physical kill latch.
+- RMS/digital kill is present but disabled by default in both firmware and dashboard. Firmware replies `ERR:RMS_KILL_DISABLED` to `CMD:KILL`, and the dashboard endpoint/button stay disabled unless explicitly commissioned.
+
+## Verification
+
+Passing:
+
+- `tools/self_check.py`
+- Python syntax checks included in `tools/self_check.py`
+- Static validation for motor mixing, control loop timing, PID anti-windup, battery telemetry, dashboard behavior, Calibration Wizard v4 behavior, and HW-127/QMC5883P compass naming/register constants, archived init sequence, and zero-read diagnostics
+- Static validation for battery-monitor disabled bring-up behavior, gated battery failsafe, configurable compass arming, and serial arm-denied diagnostics
+- Static validation for archived RC pin mapping and throttle capture from D5
+- Static validation for D13 status LED behavior in flight and calibration sketches
+- Static validation for archived-style arming/disarming thresholds, `150 ms` holds, and re-arm neutral latch
+- Static validation for flight firmware version/revision boot and telemetry fields
+
+Arduino compilation:
+
+- Arduino CLI `1.5.1` was installed locally under `tools/arduino-cli/`.
+- Arduino AVR core `1.8.8` and Servo library `1.3.0` were installed locally.
+- Flight controller compile passed for `arduino:avr:uno`: `23242` bytes flash, `1126` bytes RAM.
+- Calibration Wizard v4 compile passed for `arduino:avr:uno`: `23242` bytes flash, `647` bytes RAM.
+
+## Archived-code transplant
+
+The current flight controller and Calibration Wizard v4 now use the archived working QMC5883P compass guts:
+
+- Fixed HW-127 compass address path at `0x2C` with fallback probe retained only for board detection.
+- QMC5883P chip ID read from register `0x00`, expected `0x80`.
+- QMC5883P data reads from registers `0x01..0x06`.
+- QMC5883P init writes: `0x0D=0x40`, `0x29=0x06`, `0x0A=0xCF`, `0x0B=0x00`.
+- MPU6050 setup now matches the archived firmware DLPF and `+/-8g` accelerometer scale.

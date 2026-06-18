@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TP-ARC login</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/project-horizon-logo.png') }}">
+</head>
+<body class="login-body">
+  <main class="login-shell">
+    <form class="login-panel" method="post">
+      <img class="login-logo" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
+      <h1>TP-ARC ground station</h1>
+      <label>Username <input name="username" autocomplete="username" required></label>
+      <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
+      {% if message %}<p class="form-error">{{ message }}</p>{% endif %}
+      <button type="submit">Sign in</button>
+    </form>
+  </main>
+</body>
+</html>

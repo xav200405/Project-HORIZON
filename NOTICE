@@ -1,0 +1,13 @@
+Project HORIZON / TP-ARC UAV System
+Copyright 2026 Project HORIZON contributors
+
+Created at Temasek Polytechnic, ENG West Wing Block 25A, Unit #03-22,
+Aviation Research Centre.
+
+This project is licensed under the Apache License, Version 2.0.
+
+This repository includes experimental UAV firmware, calibration software,
+and remote monitoring software. It is not certified aviation, safety,
+commercial, or regulatory compliance software. See docs/SAFETY_ADVISORY.md
+before using any part of this project with powered motors, propellers,
+batteries, radios, or aircraft hardware.

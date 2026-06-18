@@ -1,0 +1,22 @@
+name: Self Check
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+jobs:
+  static-self-check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run static self-check
+        run: python tools/self_check.py

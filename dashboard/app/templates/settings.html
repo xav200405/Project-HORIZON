@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TP-ARC settings</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/project-horizon-logo.png') }}">
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
+      <strong>TP-ARC settings</strong>
+    </div>
+    <a class="text-button" href="{{ url_for('main.dashboard') }}">Dashboard</a>
+    <span class="badge role">{{ user.role }}</span>
+  </header>
+  <main class="dashboard-grid">
+    <section class="panel">
+      <h2>Create user</h2>
+      <form method="post" action="{{ url_for('main.create_user') }}" class="settings-form">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Username <input name="username" required></label>
+        <label>Password <input name="password" type="password" minlength="8" required></label>
+        <label>Role
+          <select name="role">
+            <option value="viewer">viewer</option>
+            <option value="operator">operator</option>
+            <option value="admin">admin</option>
+          </select>
+        </label>
+        <button type="submit">Create</button>
+      </form>
+    </section>
+    <section class="panel">
+      <h2>User accounts</h2>
+      <div class="user-admin-list">
+      {% for row in users %}
+        <article class="user-admin-card">
+          <form method="post" action="{{ url_for('main.update_user', user_id=row.id) }}" class="settings-form">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <label>Username <input name="username" value="{{ row.username }}" required></label>
+            <label>Role
+              <select name="role">
+                <option value="viewer" {% if row.role == 'viewer' %}selected{% endif %}>viewer</option>
+                <option value="operator" {% if row.role == 'operator' %}selected{% endif %}>operator</option>
+                <option value="admin" {% if row.role == 'admin' %}selected{% endif %}>admin</option>
+              </select>
+            </label>
+            <label>New password <input name="password" type="password" minlength="8" placeholder="Leave blank to keep current"></label>
+            <small>Created {{ "%.0f"|format(row.created_at) }}</small>
+            <div class="button-row">
+              <button type="submit">Save</button>
+            </div>
+          </form>
+          <form method="post" action="{{ url_for('main.delete_user', user_id=row.id) }}" onsubmit="return confirm('Delete user {{ row.username }}?');">
+            <input type="hidden" name="csrf" value="{{ csrf }}">
+            <button type="submit" class="danger-button">Delete</button>
+          </form>
+        </article>
+      {% endfor %}
+      </div>
+    </section>
+    <section class="panel">
+      <h2>Alarm thresholds</h2>
+      <div class="settings-form">
+        <label>Low voltage <input id="thrLow" type="number" step="0.1" value="14.0"></label>
+        <label>Critical voltage <input id="thrCritical" type="number" step="0.1" value="13.2"></label>
+        <label>Emergency voltage <input id="thrEmergency" type="number" step="0.1" value="12.4"></label>
+        <button id="saveThresholds">Send thresholds</button>
+      </div>
+      <h2>Remote calibration</h2>
+      <button id="startCalibration">Trigger calibration</button>
+    </section>
+    <section class="panel graph-panel">
+      <h2>Audit log</h2>
+      <table class="data-table">
+        <thead><tr><th>Time</th><th>User</th><th>Action</th><th>Details</th><th>IP</th></tr></thead>
+        <tbody>
+        {% for row in logs %}
+          <tr><td>{{ "%.0f"|format(row.timestamp) }}</td><td>{{ row.user }}</td><td>{{ row.action }}</td><td>{{ row.details }}</td><td>{{ row.ip_address }}</td></tr>
+        {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <script>
+    const csrf = "{{ csrf }}";
+    async function postJson(url, body) {
+      const response = await fetch(url, {method: "POST", headers: {"Content-Type": "application/json", "X-CSRF-Token": csrf}, body: JSON.stringify(body || {})});
+      if (!response.ok) alert(await response.text());
+    }
+    document.getElementById("saveThresholds").onclick = () => postJson("{{ url_for('main.alarm_thresholds') }}", {
+      low: Number(document.getElementById("thrLow").value),
+      critical: Number(document.getElementById("thrCritical").value),
+      emergency: Number(document.getElementById("thrEmergency").value)
+    });
+    document.getElementById("startCalibration").onclick = () => {
+      if (confirm("Trigger remote calibration workflow on the UAV?")) postJson("{{ url_for('main.calibration_start') }}", {});
+    };
+  </script>
+</body>
+</html>

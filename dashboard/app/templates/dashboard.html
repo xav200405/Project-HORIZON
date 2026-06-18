@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TP-ARC ground station</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/project-horizon-logo.png') }}">
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.7.5/dist/socket.io.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+<body data-role="{{ user.role }}" data-csrf="{{ csrf }}" data-view="{{ view }}">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
+      <strong>TP-ARC ground station</strong>
+    </div>
+    <span id="connectionBadge" class="badge amber">Reconnecting</span>
+    <span id="armingBadge" class="badge red">Disarmed</span>
+    <div class="topbar-right">
+      <nav class="top-nav">
+        <a class="text-button {% if view == 'ops' %}active-nav{% endif %}" href="{{ url_for('main.dashboard') }}">Operations</a>
+        <a class="text-button {% if view == 'telemetry' %}active-nav{% endif %}" href="{{ url_for('main.telemetry_page') }}">Telemetry</a>
+        <a class="text-button {% if view == 'network' %}active-nav{% endif %}" href="{{ url_for('main.network_page') }}">Network</a>
+      </nav>
+      <span id="latency">-- ms</span>
+      <span id="timer">00:00</span>
+      <span class="badge role">{{ user.role }}</span>
+      {% if user.role == 'admin' %}<a class="text-button" href="{{ url_for('main.settings') }}">Settings</a>{% endif %}
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="text-button" type="submit" data-csrf-form>Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <section id="alertBanner" class="alert-banner hidden">
+    <strong id="alertTitle">Alert</strong>
+    <span id="alertMessage"></span>
+    <button id="dismissAlert" class="text-button">Dismiss</button>
+  </section>
+
+  <main class="dashboard-grid">
+    <section class="metric-card battery-card" id="batteryCard">
+      <h2>Battery</h2>
+      <div class="metric-large" id="batteryVoltage">No data</div>
+      <div id="cellVoltage">-- V/cell</div>
+      <div class="soc-row"><span id="batterySoc">0%</span><div class="soc-track"><div id="socFill"></div></div></div>
+    </section>
+    <section class="metric-card">
+      <h2>Heading</h2>
+      <div class="compass"><div id="compassNeedle"></div></div>
+      <div><span id="headingValue">0.0</span> deg</div>
+      <span id="headingMode" class="badge green">Hold</span>
+    </section>
+    <section class="metric-card">
+      <h2>Attitude</h2>
+      <div class="horizon"><div id="horizonLine"></div></div>
+      <div>Roll <span id="rollValue">0.00</span> deg</div>
+      <div>Pitch <span id="pitchValue">0.00</span> deg</div>
+    </section>
+    <section class="metric-card">
+      <h2>Loop Rate</h2>
+      <div class="metric-large"><span id="sampleRateHz">0.0</span> Hz</div>
+      <div>Controller <span id="controllerMs">0</span> ms</div>
+      <div>Overrun <span id="loopOverrun">0</span></div>
+    </section>
+
+    <section class="ops-console ops-only">
+      <div class="ops-left">
+        <div class="ops-title">
+          <h2>TP-ARC Operations</h2>
+          <span id="opsModeBadge" class="badge amber">Standby</span>
+        </div>
+        <dl class="kv ops-kv">
+          <dt>Mission</dt><dd id="missionName">Bench Validation</dd>
+          <dt>Track</dt><dd id="missionTrack">Relative</dd>
+          <dt>Events</dt><dd id="missionEventCount">0</dd>
+          <dt>Samples</dt><dd id="missionSamples">0</dd>
+          <dt>Duration</dt><dd id="missionDuration">0s</dd>
+          <dt>Peak tilt</dt><dd id="missionPeakTilt">0.0 deg</dd>
+        </dl>
+        <div class="ops-actions">
+          <button id="missionMarkPhoto">Photo</button>
+          <button id="missionMarkInspect">Inspect</button>
+          <button id="missionMarkAnomaly">Anomaly</button>
+        </div>
+        <div class="ops-sliders">
+          <label>Speed reference <input id="speedReference" type="range" min="0" max="20" value="5"></label>
+          <label>Altitude reference <input id="altitudeReference" type="range" min="0" max="120" value="20"></label>
+        </div>
+      </div>
+
+      <div class="ops-map-wrap">
+        <canvas id="missionMap" width="960" height="520"></canvas>
+        <div class="map-toolbar">
+          <button id="mapZoomIn">+</button>
+          <button id="mapZoomOut">-</button>
+          <button id="mapReset">Reset</button>
+        </div>
+        <div class="map-status">
+          <span>Heading <b id="mapHeading">0.0 deg</b></span>
+          <span>Motors <b id="mapMotorSpread">0 us</b></span>
+          <span>Link <b id="mapLink">Live</b></span>
+        </div>
+      </div>
+
+      <aside class="ops-right">
+        <div class="ops-title">
+          <h2>Event Inspector</h2>
+          <span id="selectedEventBadge" class="badge role">Live</span>
+        </div>
+        <dl class="kv ops-kv">
+          <dt>State</dt><dd id="inspectorState">NO_DATA</dd>
+          <dt>Mode</dt><dd id="inspectorMode">-</dd>
+          <dt>Roll cmd</dt><dd id="inspectorRollCmd">0.0 deg</dd>
+          <dt>Pitch cmd</dt><dd id="inspectorPitchCmd">0.0 deg</dd>
+          <dt>Yaw cmd</dt><dd id="inspectorYawCmd">0.0 deg/s</dd>
+          <dt>Gimbal proxy</dt><dd id="inspectorGimbal">0.0 deg</dd>
+          <dt>Compass</dt><dd id="inspectorCompass">NOT_STARTED</dd>
+          <dt>EEPROM</dt><dd id="inspectorEeprom">-</dd>
+        </dl>
+        <div id="eventList" class="event-list"></div>
+      </aside>
+    </section>
+
+    <section class="panel graph-panel telemetry-only">
+      <div class="tabs" id="chartTabs"></div>
+      <canvas id="telemetryChart"></canvas>
+      <div class="series" id="seriesToggles"></div>
+      <div class="time-windows">
+        <button data-window="10">10s</button>
+        <button data-window="60">1m</button>
+        <button data-window="300">5m</button>
+        <button data-window="1800">30m</button>
+        <button data-window="full">Full</button>
+        <button id="jumpLive" class="hidden">Jump to live</button>
+      </div>
+    </section>
+
+    <aside class="panel side-panel telemetry-only">
+      <h2>Motor Output</h2>
+      <div id="motorBars"></div>
+      <h2>RC Input</h2>
+      <div class="sticks">
+        <div class="stick" id="leftStick"><span></span></div>
+        <div class="stick" id="rightStick"><span></span></div>
+      </div>
+      <div class="rc-grid">
+        <span>THR <b id="rcThrottle">0.00</b></span>
+        <span>Roll <b id="rcRoll">0.00</b></span>
+        <span>Pitch <b id="rcPitch">0.00</b></span>
+        <span>Yaw <b id="rcYaw">0.00</b></span>
+      </div>
+      <h2>Raw RC</h2>
+      <div class="rc-grid raw-rc-grid">
+        <span>CH1 <b id="ch1Value">1500</b></span>
+        <span>CH2 <b id="ch2Value">1500</b></span>
+        <span>CH3 <b id="ch3Value">1000</b></span>
+        <span>CH4 <b id="ch4Value">1500</b></span>
+        <span>CH5 <b id="ch5Value">1000</b></span>
+        <span>CH6 <b id="ch6Value">1000</b></span>
+      </div>
+    </aside>
+
+    <section class="panel telemetry-only">
+      <h2>PID Gains</h2>
+      <div id="pidGrid" class="pid-grid"></div>
+      <div class="button-row">
+        <button id="editPid">Edit gains</button>
+        <button id="resetPid">Reset to defaults</button>
+        <button id="sendPid" class="hidden">Send to UAV</button>
+        <button id="cancelPid" class="hidden">Cancel</button>
+      </div>
+      <p id="pidMessage" class="form-error"></p>
+    </section>
+
+    <section class="panel telemetry-only">
+      <h2>Sensor Fusion</h2>
+      <dl class="kv">
+        <dt>Roll</dt><dd id="fusionRoll">0.00 deg</dd>
+        <dt>Pitch</dt><dd id="fusionPitch">0.00 deg</dd>
+        <dt>Heading</dt><dd id="fusionYaw">0.00 deg</dd>
+        <dt>Heading setpoint</dt><dd id="fusionSetpoint">0.00 deg</dd>
+        <dt>Heading error</dt><dd id="fusionHeadingError">0.00 deg</dd>
+        <dt>Heading mode</dt><dd id="fusionMode">Hold</dd>
+        <dt>Gyro roll</dt><dd id="gyroRollRate">0.0 deg/s</dd>
+        <dt>Gyro pitch</dt><dd id="gyroPitchRate">0.0 deg/s</dd>
+        <dt>Gyro yaw</dt><dd id="gyroYawRate">0.0 deg/s</dd>
+        <dt>Mag X</dt><dd id="magXValue">0</dd>
+        <dt>Mag Y</dt><dd id="magYValue">0</dd>
+        <dt>Mag Z</dt><dd id="magZValue">0</dd>
+      </dl>
+    </section>
+
+    <section class="panel telemetry-only">
+      <h2>System State</h2>
+      <dl class="kv">
+        <dt>State</dt><dd id="systemState">NO_DATA</dd>
+        <dt>Mode</dt><dd id="flightMode">-</dd>
+        <dt>Mode cap</dt><dd id="modeCapValue">1000</dd>
+        <dt>RX</dt><dd id="rxOkValue">0</dd>
+        <dt>IMU</dt><dd id="imuOkValue">0</dd>
+        <dt>Sensors</dt><dd id="sensorsOkValue">0</dd>
+        <dt>Gyro cal</dt><dd id="gyroCalValue">0</dd>
+        <dt>Compass</dt><dd id="compassStatusValue">NOT_STARTED</dd>
+        <dt>Driver</dt><dd id="compassDriverValue">NONE</dd>
+        <dt>EEPROM</dt><dd id="eepromValue">-</dd>
+        <dt>LED</dt><dd id="ledValue">NOT_READY</dd>
+        <dt>Lockout</dt><dd id="lockoutValue">0</dd>
+      </dl>
+    </section>
+
+    <section class="panel analysis-panel telemetry-only">
+      <h2>Flight Analysis</h2>
+      <div class="analysis-grid">
+        <span><b id="analysisSamples">0</b><small>Samples</small></span>
+        <span><b id="analysisRate">0.0 Hz</b><small>Rate</small></span>
+        <span><b id="analysisDuration">0s</b><small>Duration</small></span>
+        <span><b id="analysisRoll">0.0 deg</b><small>Max roll</small></span>
+        <span><b id="analysisPitch">0.0 deg</b><small>Max pitch</small></span>
+        <span><b id="analysisMotorSpread">0 us</b><small>Motor spread</small></span>
+      </div>
+      <div id="stateTimeline" class="state-timeline"></div>
+      <div class="button-row">
+        <button id="markEvent">Mark</button>
+        <input id="markerLabel" maxlength="80" value="Flight note">
+      </div>
+    </section>
+
+    <section class="panel fields-panel telemetry-only">
+      <h2>Telemetry Fields</h2>
+      <div id="fieldCatalog" class="field-catalog"></div>
+    </section>
+
+    <section class="panel live-table-panel telemetry-only">
+      <div class="live-table-header">
+        <h2>All Live Telemetry</h2>
+        <div class="live-table-stats">
+          <span><b id="livePacketRate">0.0</b> Hz</span>
+          <span><b id="livePacketCount">0</b> packets</span>
+          <span id="liveLastPacket">No packet</span>
+        </div>
+      </div>
+      <div class="live-field-table" id="liveFieldTable"></div>
+    </section>
+
+    <section class="network-console network-only">
+      <div class="network-card">
+        <h2>Serial Link</h2>
+        <div class="network-status-row">
+          <span id="serialStatusBadge" class="badge amber">Starting</span>
+          <strong id="serialPortValue">-</strong>
+        </div>
+        <dl class="kv">
+          <dt>Baud</dt><dd id="serialBaudValue">0</dd>
+          <dt>Last serial packet</dt><dd id="serialAgeValue">-</dd>
+          <dt>Packets</dt><dd id="serialPacketsValue">0</dd>
+          <dt>Bytes</dt><dd id="serialBytesValue">0</dd>
+          <dt>Packet type</dt><dd id="serialPacketTypeValue">-</dd>
+        </dl>
+      </div>
+
+      <div class="network-card">
+        <h2>Browser Link</h2>
+        <div class="network-status-row">
+          <span id="socketStatusBadge" class="badge amber">Connecting</span>
+          <strong id="socketTransportValue">-</strong>
+        </div>
+        <dl class="kv">
+          <dt>Receive rate</dt><dd id="networkPacketRate">0.0 Hz</dd>
+          <dt>Packet age</dt><dd id="networkPacketAge">-</dd>
+          <dt>Receive latency</dt><dd id="networkLatencyValue">-</dd>
+          <dt>Browser online</dt><dd id="browserOnlineValue">-</dd>
+          <dt>Socket id</dt><dd id="socketIdValue">-</dd>
+        </dl>
+      </div>
+
+      <div class="network-card">
+        <h2>Server Timing</h2>
+        <dl class="kv">
+          <dt>Server time</dt><dd id="serverTimeValue">-</dd>
+          <dt>Client time</dt><dd id="clientTimeValue">-</dd>
+          <dt>Clock delta</dt><dd id="clockDeltaValue">-</dd>
+          <dt>Latest state age</dt><dd id="latestStateAgeValue">-</dd>
+          <dt>Raw buffer</dt><dd id="rawLineCountValue">0</dd>
+        </dl>
+      </div>
+
+      <div class="network-card network-wide">
+        <h2>Recent Link Activity</h2>
+        <div id="networkEvents" class="network-events"></div>
+        <div class="raw-box">
+          <div class="raw-header"><strong>Last Serial Line</strong><button id="copyNetworkRaw">Copy</button></div>
+          <pre id="networkRawLine"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel controls-panel telemetry-only">
+      <div>
+        <button id="killButton" class="kill-button" {% if not rms_kill_enabled %}disabled title="RMS kill not commissioned"{% endif %}>Emergency kill</button>
+        <small>{% if rms_kill_enabled %}Immediately disarms all motors.{% else %}RMS kill is disabled; use transmitter CH6.{% endif %}</small>
+      </div>
+      <div class="exports">
+        <button id="csvExport">CSV</button>
+        <button id="jsonExport">JSON</button>
+        <button id="pdfExport">PDF</button>
+        <button id="pngExport">PNG</button>
+      </div>
+      <div class="raw-box">
+        <div class="raw-header"><strong>Raw Data</strong><button id="copyRaw">Copy</button></div>
+        <pre id="rawData"></pre>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>TP-ARC v1.0</span>
+    <span>TLS <b id="tlsStatus">active</b></span>
+    <span>Role {{ user.role }}</span>
+    <span id="sessionCountdown">30:00</span>
+  </footer>
+
+  <dialog id="confirmKill">
+    <h2>Confirm emergency kill</h2>
+    <p>This will immediately disarm all motors. The UAV will lose all thrust. Continue?</p>
+    <div class="button-row">
+      <button id="confirmKillYes" class="kill-button">Kill motors</button>
+      <button id="confirmKillNo">Cancel</button>
+    </div>
+  </dialog>
+
+  <script>window.RMS_KILL_ENABLED = {{ 'true' if rms_kill_enabled else 'false' }};</script>
+  <script src="{{ url_for('static', filename='js/dashboard.js') }}"></script>
+</body>
+</html>

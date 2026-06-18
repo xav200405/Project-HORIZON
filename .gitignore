@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.coverage
+htmlcov/
+
+# Local dashboard environment
+dashboard/.venv/
+dashboard/*.sqlite3
+dashboard/*.sqlite3-*
+dashboard/server.log
+dashboard/cert.pem
+dashboard/key.pem
+
+# Local secrets and runtime files
+.env
+.env.*
+*.log
+*.sqlite3
+*.sqlite3-*
+*.db
+*.db-*
+*.pem
+*.key
+*.crt
+exports/
+telemetry_exports/
+
+# Arduino/editor build products
+build/
+*.elf
+*.hex
+*.eep
+*.map
+tools/arduino-cli/arduino-cli.exe
+tools/arduino-cli/arduino-cli.zip
+tools/arduino-cli/data/
+tools/arduino-cli/downloads/
+tools/arduino-cli/user/
+
+# OS/editor noise
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/

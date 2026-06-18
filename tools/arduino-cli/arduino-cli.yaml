@@ -1,0 +1,6 @@
+directories:
+  data: tools/arduino-cli/data
+  downloads: tools/arduino-cli/downloads
+  user: tools/arduino-cli/user
+board_manager:
+  additional_urls: []

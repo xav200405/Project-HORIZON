@@ -137,12 +137,48 @@ h2 { font-size: 15px; }
   align-items: center;
 }
 .hidden { display: none !important; }
-body[data-view="ops"] .telemetry-only { display: none !important; }
-body[data-view="telemetry"] .ops-only { display: none !important; }
-body[data-view="ops"] .network-only { display: none !important; }
-body[data-view="telemetry"] .network-only { display: none !important; }
-body[data-view="network"] .ops-only, body[data-view="network"] .telemetry-only { display: none !important; }
+body[data-view="ops"] .telemetry-detail { display: none !important; }
+body[data-view="telemetry"] .overview-only { display: none !important; }
+body[data-view="ops"] .network-only, body[data-view="telemetry"] .network-only { display: none !important; }
+body[data-view="network"] .data-view { display: none !important; }
+.overview-band {
+  grid-column: span 4;
+  min-height: 126px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 18px;
+  border-radius: 8px;
+  color: #fff;
+  background: #151f2e;
+  border: 1px solid #263446;
+}
+.overview-band h1 {
+  margin: 0;
+  font-size: 28px;
+}
+.overview-status {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(96px, 1fr));
+  gap: 10px;
+  width: min(760px, 100%);
+}
+.overview-status span {
+  min-width: 0;
+  padding: 10px 12px;
+  border: 1px solid rgba(255,255,255,.14);
+  border-radius: 8px;
+  background: rgba(255,255,255,.06);
+}
+.overview-status b {
+  display: block;
+  font-size: 18px;
+  overflow-wrap: anywhere;
+}
+.overview-status small { color: #cbd5e1; }
 .graph-panel { grid-column: span 3; min-height: 430px; }
+body[data-view="ops"] .graph-panel { grid-column: span 4; }
 .side-panel { grid-column: span 1; }
 #telemetryChart {
   width: 100%;
@@ -152,79 +188,6 @@ body[data-view="network"] .ops-only, body[data-view="network"] .telemetry-only {
   border: 1px solid var(--line);
   border-radius: 6px;
 }
-.ops-console {
-  grid-column: span 4;
-  min-height: 520px;
-  display: grid;
-  grid-template-columns: 290px minmax(0, 1fr) 310px;
-  background: #0f1724;
-  border: 1px solid #263241;
-  color: #eef4fb;
-  border-radius: 8px;
-  overflow: hidden;
-}
-.ops-left, .ops-right {
-  padding: 14px;
-  min-width: 0;
-  background: #151f2e;
-}
-.ops-left { border-right: 1px solid #263241; }
-.ops-right { border-left: 1px solid #263241; }
-.ops-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 12px; }
-.ops-title h2 { margin: 0; color: #fff; }
-.ops-kv { font-size: 13px; }
-.ops-kv dt { color: #aab6c4; }
-.ops-kv dd { color: #fff; font-family: Consolas, monospace; }
-.ops-actions { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 16px 0; }
-.ops-actions button, .map-toolbar button {
-  background: #233142;
-  color: #fff;
-  border-color: #3a4a5c;
-}
-.ops-sliders { display: grid; gap: 12px; color: #c8d3df; font-size: 13px; }
-.ops-sliders label { display: grid; gap: 6px; }
-.ops-map-wrap { position: relative; min-width: 0; overflow: hidden; background: #0f151c; }
-#missionMap { width: 100%; height: 100%; display: block; }
-.map-toolbar {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  display: grid;
-  gap: 6px;
-}
-.map-status {
-  position: absolute;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-  padding: 8px 10px;
-  background: rgba(12, 18, 25, .82);
-  border: 1px solid rgba(255,255,255,.18);
-  font-size: 12px;
-}
-.event-list {
-  display: grid;
-  gap: 6px;
-  max-height: 260px;
-  overflow: auto;
-  margin-top: 12px;
-}
-.event-item {
-  display: grid;
-  grid-template-columns: 42px 1fr auto;
-  gap: 8px;
-  align-items: center;
-  padding: 8px;
-  border: 1px solid #2d3a49;
-  background: #111820;
-  color: #eef4fb;
-  text-align: left;
-}
-.event-item.active { border-color: #27d6a3; }
-.event-item small { color: #aab6c4; }
 .tabs, .series, .time-windows, .button-row, .exports { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .tabs button, .series button, .time-windows button {
   min-height: 32px;
@@ -294,6 +257,13 @@ body[data-view="network"] .ops-only, body[data-view="network"] .telemetry-only {
   align-items: center;
   margin-bottom: 10px;
 }
+details.live-table-panel > summary {
+  cursor: pointer;
+  list-style: none;
+}
+details.live-table-panel > summary::-webkit-details-marker { display: none; }
+details.live-table-panel:not([open]) { padding-bottom: 10px; }
+details.live-table-panel:not([open]) .live-table-header { margin-bottom: 0; }
 .live-table-stats { display: flex; gap: 12px; flex-wrap: wrap; color: var(--muted); font-size: 13px; }
 .live-field-table {
   display: grid;
@@ -557,17 +527,16 @@ dialog::backdrop { background: rgba(15, 23, 36, .56); }
 
 @media (max-width: 900px) {
   .dashboard-grid { grid-template-columns: 1fr 1fr; }
-  .graph-panel, .side-panel, .controls-panel, .analysis-panel, .fields-panel, .ops-console, .live-table-panel, .network-console { grid-column: span 2; }
+  .graph-panel, .side-panel, .controls-panel, .analysis-panel, .fields-panel, .live-table-panel, .network-console, .overview-band { grid-column: span 2; }
   .settings-grid { grid-template-columns: 1fr 1fr; }
   .firmware-grid { grid-template-columns: 1fr; }
   .firmware-hero, .firmware-log-panel { grid-column: span 1; }
   .settings-hero, .settings-audit { grid-column: span 2; }
-  .ops-console { grid-template-columns: 1fr; }
   .network-console { grid-template-columns: 1fr; }
   .network-wide { grid-column: span 1; }
-  .ops-left, .ops-right { border: 0; border-bottom: 1px solid #263241; }
-  .ops-map-wrap { min-height: 430px; }
   .controls-panel { grid-template-columns: 1fr; }
+  .overview-band { display: grid; }
+  .overview-status { grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
   .field-catalog { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .live-field-table { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .network-events { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -585,12 +554,11 @@ dialog::backdrop { background: rgba(15, 23, 36, .56); }
   .login-brand-panel { min-height: 220px; padding: 24px; }
   .login-brand-panel h1 { font-size: 26px; }
   .login-panel { padding: 24px; }
-  .metric-card, .graph-panel, .side-panel, .controls-panel, .analysis-panel, .fields-panel, .ops-console, .live-table-panel, .network-console { grid-column: span 1; }
+  .metric-card, .graph-panel, .side-panel, .controls-panel, .analysis-panel, .fields-panel, .live-table-panel, .network-console, .overview-band { grid-column: span 1; }
   .analysis-grid, .field-catalog, .live-field-table { grid-template-columns: 1fr; }
+  .overview-status { grid-template-columns: 1fr; }
   .network-events { grid-template-columns: 1fr; }
   .live-table-header { display: grid; }
-  .ops-actions { grid-template-columns: 1fr; }
-  .map-status { position: static; border-left: 0; border-right: 0; }
   .topbar { height: auto; min-height: 56px; flex-wrap: wrap; padding: 8px; }
   .alert-banner { top: 72px; }
 }

@@ -12,7 +12,7 @@ APP_DIR = ROOT / "app"
 SOURCE_LAUNCHER = ROOT / "TP_ARC_RMS_single.py"
 LAUNCHER = APP_DIR / "TP_ARC_RMS_single.py"
 DIST_DIR = ROOT / "dist"
-PACKAGE_VERSION = "2026.06-rev01.6"
+PACKAGE_VERSION = "2026.06-rev01.7"
 
 
 def app_version() -> str:

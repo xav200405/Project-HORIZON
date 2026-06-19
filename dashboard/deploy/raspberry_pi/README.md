@@ -1,16 +1,42 @@
 # Raspberry Pi Deployment
 
-Recommended path: build and install the Pi app package. From this folder:
+This folder contains the Raspberry Pi packaging workflow for TP-ARC RMS.
+
+For the full user guide, read `../../../docs/STEP_BY_STEP_GUIDE.md`.
+
+## Build The Package
+
+From this folder:
 
 ```bash
 python3 build_pi_app_package.py
 ```
 
-Copy the generated `dist/tparc-rms-pi-app-*.tar.gz` to the Raspberry Pi, then:
+The package is created in:
+
+```text
+dist/
+```
+
+## Install On The Pi
+
+1. Copy `dist/tparc-rms-pi-app-*.tar.gz` to the Raspberry Pi.
+
+2. Extract it:
 
 ```bash
 tar -xzf tparc-rms-pi-app-*.tar.gz
+```
+
+3. Enter the package folder:
+
+```bash
 cd tparc-rms-pi-app
+```
+
+4. Install the service:
+
+```bash
 sudo bash install.sh
 ```
 
@@ -22,7 +48,37 @@ The installer handles Raspberry Pi OS's protected Python environment by using
 `apt` for OS prerequisites and a private app virtual environment under
 `/opt/tparc-rms/venv`.
 
-To update an installed Pi, copy a newer package to it, extract it, and run:
+## Open The Dashboard
+
+1. Find the Pi IP:
+
+```bash
+hostname -I
+```
+
+2. Open this URL from a browser on the same network:
+
+```text
+http://<raspberry-pi-ip>:5000/login
+```
+
+3. Log in as `tparc` / `tparc0322`.
+
+4. Change the default passwords in Settings.
+
+## Update An Installed Pi
+
+Manual update:
+
+1. Copy a newer package to the Pi.
+
+2. Extract it:
+
+```bash
+tar -xzf tparc-rms-pi-app-*.tar.gz
+```
+
+3. Run the package updater:
 
 ```bash
 cd tparc-rms-pi-app
@@ -45,13 +101,17 @@ During firmware upload, the RMS pauses its telemetry serial reader, runs
 `arduino-cli compile`, runs `arduino-cli upload`, then restarts telemetry.
 Every attempt is recorded in the audit log.
 
-For GitHub-based updates, create a GitHub release in
+Automatic GitHub update:
+
+1. Create a GitHub release in
 `xav200405/Project-HORIZON` with the package tarball as an asset. If no
 matching release asset exists, the updater falls back to scanning under
 `dashboard` for `tparc-rms-pi-app-*.tar.gz`, so future folders such as
 `dashboard/2026.REV01.1/dist` do not require Pi config changes. The packaged
 config already sets `TPARC_UPDATE_REPO=xav200405/Project-HORIZON` and
-`TPARC_UPDATE_SOURCE_PATH=dashboard`, so an installed Pi can update itself with:
+`TPARC_UPDATE_SOURCE_PATH=dashboard`.
+
+2. Run this on the Pi:
 
 ```bash
 sudo bash /opt/tparc-rms/update.sh

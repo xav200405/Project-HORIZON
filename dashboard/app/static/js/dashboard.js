@@ -19,9 +19,6 @@ let sessionStart = Date.now();
 let pidEdit = false;
 let pidValues = { kp: 0.150, ki: 0.010, kd: 0.010 };
 let lastAnalysis = null;
-let missionEvents = [];
-let selectedEventId = "live";
-let mapScale = 1;
 let telemetryPacketCount = 0;
 let packetTimes = [];
 let networkEvents = [];
@@ -275,6 +272,10 @@ class TelemetryChart {
 const chart = new TelemetryChart(document.getElementById("telemetryChart"));
 
 function qs(id) { return document.getElementById(id); }
+function setText(id, value) {
+  const el = qs(id);
+  if (el) el.textContent = value;
+}
 function fixed(value, digits) {
   const number = Number(value ?? 0);
   return Number.isFinite(number) ? number.toFixed(digits) : (0).toFixed(digits);
@@ -486,10 +487,6 @@ function updateTelemetry(data) {
   packetTimes = packetTimes.filter(t => nowPacket - t <= 2.0);
   history.push(data);
   while (history.length > MAX_HISTORY_POINTS) history.shift();
-  if (data.marker && !missionEvents.some(event => event.timestamp === data.timestamp && event.label === data.marker)) {
-    missionEvents.push({ id: `event-${Date.now()}`, label: data.marker, type: "MARK", timestamp: data.timestamp, snapshot: data });
-    missionEvents = missionEvents.slice(-40);
-  }
   qs("armingBadge").textContent = data.armed ? "Armed" : "Disarmed";
   qs("armingBadge").className = `badge ${data.armed ? "green" : "red"}`;
   qs("headingValue").textContent = fixed(data.yaw, 1);
@@ -514,9 +511,7 @@ function updateTelemetry(data) {
   qs("magXValue").textContent = fmt(data.mag_x, 0);
   qs("magYValue").textContent = fmt(data.mag_y, 0);
   qs("magZValue").textContent = fmt(data.mag_z, 0);
-  if (currentView === "telemetry") {
-    updateSystemState(data);
-    updatePidFromTelemetry(data);
+  if (currentView !== "network") {
     const uiNow = performance.now();
     if (uiNow - lastFieldCatalogRender >= FIELD_FRAME_MS) {
       lastFieldCatalogRender = uiNow;
@@ -527,13 +522,19 @@ function updateTelemetry(data) {
       updateLiveTelemetryTable(data);
     }
   }
+  if (currentView === "telemetry") {
+    updateSystemState(data);
+    updatePidFromTelemetry(data);
+  }
   updateNetworkFromTelemetry(data);
-  if (currentView === "ops") updateMissionConsole(data);
+  if (currentView === "ops") updateOverviewSummary(data);
   qs("rawData").textContent = (data.raw_lines || [data.raw || ""]).join("\n");
   updateBattery(data);
   if (currentView === "telemetry") {
     updateMotors(data);
     updateSticks(data);
+  }
+  if (currentView !== "network") {
     scheduleChartUpdate();
   }
 }
@@ -662,192 +663,18 @@ async function refreshLatestStateFallback() {
   }
 }
 
-function addMissionEvent(label, type, snapshot) {
-  const event = {
-    id: `event-${Date.now()}-${missionEvents.length}`,
-    label,
-    type,
-    timestamp: Date.now() / 1000,
-    snapshot: { ...(snapshot || history[history.length - 1] || {}) },
-  };
-  missionEvents.push(event);
-  missionEvents = missionEvents.slice(-40);
-  selectedEventId = event.id;
-  renderEventList();
-  renderMissionMap(history[history.length - 1] || {});
-  return event;
-}
-
-function updateMissionConsole(data) {
-  const mode = data.armed ? "Airborne" : data.state || "Standby";
-  qs("opsModeBadge").textContent = mode;
-  qs("opsModeBadge").className = `badge ${data.armed ? "green" : data.lockout ? "red" : "amber"}`;
-  qs("missionEventCount").textContent = missionEvents.length;
-  qs("missionSamples").textContent = fmt(lastAnalysis?.count ?? history.length, 0);
-  qs("missionDuration").textContent = `${fixed(lastAnalysis?.duration_s ?? 0, 0)}s`;
-  qs("missionPeakTilt").textContent = `${fixed(Math.max(Math.abs(lastAnalysis?.numeric?.roll?.min ?? 0), Math.abs(lastAnalysis?.numeric?.roll?.max ?? 0), Math.abs(lastAnalysis?.numeric?.pitch?.min ?? 0), Math.abs(lastAnalysis?.numeric?.pitch?.max ?? 0)), 1)} deg`;
-  qs("mapHeading").textContent = `${fixed(data.yaw, 1)} deg`;
-  qs("mapMotorSpread").textContent = `${motorSpread(data)} us`;
-  qs("mapLink").textContent = data.raw ? "Live" : "Sim";
-  updateInspector(data);
-  renderEventList();
-  renderMissionMap(data);
-}
-
-function updateInspector(data) {
-  const selected = missionEvents.find(event => event.id === selectedEventId);
-  const sample = selected?.snapshot || data;
-  qs("selectedEventBadge").textContent = selected ? selected.type : "Live";
-  qs("inspectorState").textContent = fmt(sample.state);
-  qs("inspectorMode").textContent = fmt(sample.mode);
-  qs("inspectorRollCmd").textContent = `${fixed(sample.roll_cmd, 1)} deg`;
-  qs("inspectorPitchCmd").textContent = `${fixed(sample.pitch_cmd, 1)} deg`;
-  qs("inspectorYawCmd").textContent = `${fixed(sample.yaw_cmd, 1)} deg/s`;
-  qs("inspectorGimbal").textContent = `${fixed(sample.heading_error ?? sample.pitch ?? 0, 1)} deg`;
-  qs("inspectorCompass").textContent = fmt(sample.compass_status);
-  qs("inspectorEeprom").textContent = fmt(sample.eeprom);
-}
-
-function renderEventList() {
-  const list = qs("eventList");
-  if (!list) return;
-  const recent = missionEvents.slice(-8).reverse();
-  list.innerHTML = recent.map((event, index) => {
-    const active = event.id === selectedEventId ? " active" : "";
-    const label = event.label.replace(/[<>&"]/g, c => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;", '"': "&quot;" }[c]));
-    return `<button class="event-item${active}" data-event-id="${event.id}"><b>${event.type}</b><span>${label}</span><small>#${missionEvents.length - index}</small></button>`;
-  }).join("");
-  [...list.querySelectorAll("[data-event-id]")].forEach(button => {
-    button.onclick = () => {
-      selectedEventId = button.dataset.eventId;
-      updateMissionConsole(history[history.length - 1] || {});
-    };
-  });
-}
-
-function routePoints(canvas) {
-  const samples = history.slice(-900);
-  let x = 0;
-  let y = 0;
-  const points = [{ x, y, sample: samples[0] || {} }];
-  samples.forEach((sample, index) => {
-    if (index === 0) return;
-    const heading = ((Number(sample.yaw ?? 0) - 90) * Math.PI) / 180;
-    const throttle = Number(sample.throttle ?? 0);
-    const step = sample.armed ? 1.4 + throttle * 2.2 : 0.35 + throttle * 0.7;
-    x += Math.cos(heading) * step;
-    y += Math.sin(heading) * step;
-    points.push({ x, y, sample });
-  });
-  const xs = points.map(p => p.x);
-  const ys = points.map(p => p.y);
-  const minX = Math.min(...xs, -40);
-  const maxX = Math.max(...xs, 40);
-  const minY = Math.min(...ys, -25);
-  const maxY = Math.max(...ys, 25);
-  const width = Math.max(1, maxX - minX);
-  const height = Math.max(1, maxY - minY);
-  const scale = Math.min(canvas.width / width, canvas.height / height) * 0.68 * mapScale;
-  const cx = canvas.width / 2 - ((minX + maxX) / 2) * scale;
-  const cy = canvas.height / 2 - ((minY + maxY) / 2) * scale;
-  return points.map(point => ({ ...point, px: cx + point.x * scale, py: cy + point.y * scale }));
-}
-
-function renderMissionMap(data) {
-  const canvas = qs("missionMap");
-  if (!canvas) return;
-  const ctx = canvas.getContext("2d");
-  const rect = canvas.getBoundingClientRect();
-  const dpr = window.devicePixelRatio || 1;
-  const width = Math.max(600, Math.floor(rect.width * dpr));
-  const height = Math.max(320, Math.floor(rect.height * dpr));
-  if (canvas.width !== width || canvas.height !== height) {
-    canvas.width = width;
-    canvas.height = height;
-  }
-  ctx.clearRect(0, 0, width, height);
-  const grad = ctx.createLinearGradient(0, 0, width, height);
-  grad.addColorStop(0, "#223044");
-  grad.addColorStop(.42, "#243827");
-  grad.addColorStop(1, "#16202b");
-  ctx.fillStyle = grad;
-  ctx.fillRect(0, 0, width, height);
-
-  ctx.strokeStyle = "rgba(255,255,255,.08)";
-  ctx.lineWidth = 1;
-  for (let x = 0; x < width; x += 48 * dpr) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x + 80 * dpr, height);
-    ctx.stroke();
-  }
-  for (let y = 0; y < height; y += 42 * dpr) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(width, y + 30 * dpr);
-    ctx.stroke();
-  }
-
-  const points = routePoints(canvas);
-  if (points.length > 1) {
-    ctx.strokeStyle = "#27d6a3";
-    ctx.lineWidth = 4 * dpr;
-    ctx.beginPath();
-    points.forEach((point, index) => index ? ctx.lineTo(point.px, point.py) : ctx.moveTo(point.px, point.py));
-    ctx.stroke();
-
-    ctx.strokeStyle = "rgba(255,255,255,.55)";
-    ctx.setLineDash([5 * dpr, 7 * dpr]);
-    ctx.lineWidth = 1 * dpr;
-    points.filter((_, index) => index % 90 === 0).forEach(point => {
-      ctx.beginPath();
-      ctx.moveTo(point.px, point.py);
-      ctx.lineTo(point.px, height - 18 * dpr);
-      ctx.stroke();
-    });
-    ctx.setLineDash([]);
-  }
-
-  const current = points[points.length - 1] || { px: width / 2, py: height / 2 };
-  const yaw = Number(data.yaw ?? 0);
-  const angle = ((yaw - 90) * Math.PI) / 180;
-  ctx.fillStyle = "rgba(236, 187, 54, .26)";
-  ctx.beginPath();
-  ctx.moveTo(current.px, current.py);
-  ctx.arc(current.px, current.py, 170 * dpr, angle - 0.28, angle + 0.28);
-  ctx.closePath();
-  ctx.fill();
-
-  missionEvents.slice(-12).forEach((event, index) => {
-    const pct = missionEvents.length <= 1 ? 1 : index / Math.max(1, missionEvents.slice(-12).length - 1);
-    const point = points[Math.floor(pct * Math.max(0, points.length - 1))] || current;
-    ctx.fillStyle = event.type === "ANOM" ? "#bd1e1e" : event.type === "PHOTO" ? "#4da3ff" : "#f4c542";
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2 * dpr;
-    ctx.beginPath();
-    ctx.arc(point.px, point.py, 7 * dpr, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.stroke();
-    ctx.fillStyle = "#ffffff";
-    ctx.font = `${12 * dpr}px Segoe UI`;
-    ctx.fillText(String(index + 1), point.px + 10 * dpr, point.py - 8 * dpr);
-  });
-
-  ctx.save();
-  ctx.translate(current.px, current.py);
-  ctx.rotate(angle + Math.PI / 2);
-  ctx.fillStyle = "#6cc7ff";
-  ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 2 * dpr;
-  ctx.beginPath();
-  ctx.moveTo(0, -15 * dpr);
-  ctx.lineTo(11 * dpr, 13 * dpr);
-  ctx.lineTo(0, 7 * dpr);
-  ctx.lineTo(-11 * dpr, 13 * dpr);
-  ctx.closePath();
-  ctx.fill();
-  ctx.stroke();
-  ctx.restore();
+function updateOverviewSummary(data) {
+  const peakTilt = Math.max(
+    Math.abs(lastAnalysis?.numeric?.roll?.min ?? Number(data.roll ?? 0)),
+    Math.abs(lastAnalysis?.numeric?.roll?.max ?? Number(data.roll ?? 0)),
+    Math.abs(lastAnalysis?.numeric?.pitch?.min ?? Number(data.pitch ?? 0)),
+    Math.abs(lastAnalysis?.numeric?.pitch?.max ?? Number(data.pitch ?? 0)),
+  );
+  setText("overviewState", fmt(data.state));
+  setText("overviewMode", fmt(data.mode || data.heading_mode));
+  setText("overviewSamples", fmt(lastAnalysis?.count ?? history.length, 0));
+  setText("overviewPeakTilt", `${fixed(peakTilt, 1)} deg`);
+  setText("overviewMotorSpread", `${motorSpread(data)} us`);
 }
 
 function updateSystemState(data) {
@@ -970,30 +797,8 @@ function setupControls() {
   qs("markEvent").onclick = async () => {
     if (role === "viewer") return;
     await postJson("/api/recording/marker", { label: qs("markerLabel").value });
-    addMissionEvent(qs("markerLabel").value, "MARK");
     await refreshAnalysis();
   };
-  qs("missionMarkPhoto").onclick = async () => {
-    if (role === "viewer") return;
-    const event = addMissionEvent("Photo point", "PHOTO");
-    await postJson("/api/recording/marker", { label: `${event.type}:${event.label}` });
-    await refreshAnalysis();
-  };
-  qs("missionMarkInspect").onclick = async () => {
-    if (role === "viewer") return;
-    const event = addMissionEvent("Inspection point", "INSP");
-    await postJson("/api/recording/marker", { label: `${event.type}:${event.label}` });
-    await refreshAnalysis();
-  };
-  qs("missionMarkAnomaly").onclick = async () => {
-    if (role === "viewer") return;
-    const event = addMissionEvent("Anomaly point", "ANOM");
-    await postJson("/api/recording/marker", { label: `${event.type}:${event.label}` });
-    await refreshAnalysis();
-  };
-  qs("mapZoomIn").onclick = () => { mapScale = clamp(mapScale + 0.2, 0.6, 2.4); renderMissionMap(history[history.length - 1] || {}); };
-  qs("mapZoomOut").onclick = () => { mapScale = clamp(mapScale - 0.2, 0.6, 2.4); renderMissionMap(history[history.length - 1] || {}); };
-  qs("mapReset").onclick = () => { mapScale = 1; selectedEventId = "live"; renderMissionMap(history[history.length - 1] || {}); renderEventList(); };
   qs("copyNetworkRaw").onclick = () => navigator.clipboard.writeText(qs("networkRawLine").textContent);
   [...document.querySelectorAll(".time-windows button[data-window]")].forEach(btn => btn.onclick = () => { windowSeconds = btn.dataset.window === "full" ? "full" : Number(btn.dataset.window); updateChart(); });
   if (!rmsKillEnabled) {
@@ -1005,9 +810,6 @@ function setupControls() {
     qs("killButton").disabled = true;
     qs("killButton").title = rmsKillEnabled ? "Insufficient permissions" : "RMS kill not commissioned";
     qs("markEvent").disabled = true;
-    qs("missionMarkPhoto").disabled = true;
-    qs("missionMarkInspect").disabled = true;
-    qs("missionMarkAnomaly").disabled = true;
   }
   togglePidButtons();
   renderPidGrid();
@@ -1061,7 +863,7 @@ setupControls();
 initializeConnectionMode();
 hydrateRecentTelemetry();
 refreshAnalysis();
-refreshNetworkState();
+if (currentView === "network") refreshNetworkState();
 setInterval(refreshLatestStateFallback, 1000);
 setInterval(refreshAnalysis, 15000);
-setInterval(refreshNetworkState, 2000);
+if (currentView === "network") setInterval(refreshNetworkState, 2000);

@@ -17,7 +17,7 @@
     <span id="armingBadge" class="badge red">Disarmed</span>
     <div class="topbar-right">
       <nav class="top-nav">
-        <a class="text-button {% if view == 'ops' %}active-nav{% endif %}" href="{{ url_for('main.dashboard') }}">Operations</a>
+        <a class="text-button {% if view == 'ops' %}active-nav{% endif %}" href="{{ url_for('main.dashboard') }}">Overview</a>
         <a class="text-button {% if view == 'telemetry' %}active-nav{% endif %}" href="{{ url_for('main.telemetry_page') }}">Telemetry</a>
         <a class="text-button {% if view == 'network' %}active-nav{% endif %}" href="{{ url_for('main.network_page') }}">Network</a>
         {% if user.role == 'admin' %}<a class="text-button" href="{{ url_for('main.firmware_page') }}">Firmware</a>{% endif %}
@@ -40,90 +40,46 @@
   </section>
 
   <main class="dashboard-grid">
-    <section class="metric-card battery-card" id="batteryCard">
+    <section class="metric-card battery-card data-view" id="batteryCard">
       <h2>Battery</h2>
       <div class="metric-large" id="batteryVoltage">No data</div>
       <div id="cellVoltage">-- V/cell</div>
       <div class="soc-row"><span id="batterySoc">0%</span><div class="soc-track"><div id="socFill"></div></div></div>
     </section>
-    <section class="metric-card">
+    <section class="metric-card data-view">
       <h2>Heading</h2>
       <div class="compass"><div id="compassNeedle"></div></div>
       <div><span id="headingValue">0.0</span> deg</div>
       <span id="headingMode" class="badge green">Hold</span>
     </section>
-    <section class="metric-card">
+    <section class="metric-card data-view">
       <h2>Attitude</h2>
       <div class="horizon"><div id="horizonLine"></div></div>
       <div>Roll <span id="rollValue">0.00</span> deg</div>
       <div>Pitch <span id="pitchValue">0.00</span> deg</div>
     </section>
-    <section class="metric-card">
+    <section class="metric-card data-view">
       <h2>Loop Rate</h2>
       <div class="metric-large"><span id="sampleRateHz">0.0</span> Hz</div>
       <div>Controller <span id="controllerMs">0</span> ms</div>
       <div>Overrun <span id="loopOverrun">0</span></div>
     </section>
 
-    <section class="ops-console ops-only">
-      <div class="ops-left">
-        <div class="ops-title">
-          <h2>TP-ARC Operations</h2>
-          <span id="opsModeBadge" class="badge amber">Standby</span>
-        </div>
-        <dl class="kv ops-kv">
-          <dt>Mission</dt><dd id="missionName">Bench Validation</dd>
-          <dt>Track</dt><dd id="missionTrack">Relative</dd>
-          <dt>Events</dt><dd id="missionEventCount">0</dd>
-          <dt>Samples</dt><dd id="missionSamples">0</dd>
-          <dt>Duration</dt><dd id="missionDuration">0s</dd>
-          <dt>Peak tilt</dt><dd id="missionPeakTilt">0.0 deg</dd>
-        </dl>
-        <div class="ops-actions">
-          <button id="missionMarkPhoto">Photo</button>
-          <button id="missionMarkInspect">Inspect</button>
-          <button id="missionMarkAnomaly">Anomaly</button>
-        </div>
-        <div class="ops-sliders">
-          <label>Speed reference <input id="speedReference" type="range" min="0" max="20" value="5"></label>
-          <label>Altitude reference <input id="altitudeReference" type="range" min="0" max="120" value="20"></label>
-        </div>
+    <section class="overview-band overview-only data-view">
+      <div>
+        <p class="eyebrow">Live Telemetry</p>
+        <h1>Telemetry Overview</h1>
       </div>
-
-      <div class="ops-map-wrap">
-        <canvas id="missionMap" width="960" height="520"></canvas>
-        <div class="map-toolbar">
-          <button id="mapZoomIn">+</button>
-          <button id="mapZoomOut">-</button>
-          <button id="mapReset">Reset</button>
-        </div>
-        <div class="map-status">
-          <span>Heading <b id="mapHeading">0.0 deg</b></span>
-          <span>Motors <b id="mapMotorSpread">0 us</b></span>
-          <span>Link <b id="mapLink">Live</b></span>
-        </div>
+      <div class="overview-status">
+        <span><b id="overviewState">NO_DATA</b><small>State</small></span>
+        <span><b id="overviewMode">-</b><small>Mode</small></span>
+        <span><b id="overviewSamples">0</b><small>Samples</small></span>
+        <span><b id="overviewPeakTilt">0.0 deg</b><small>Peak tilt</small></span>
+        <span><b id="overviewMotorSpread">0 us</b><small>Motor spread</small></span>
       </div>
-
-      <aside class="ops-right">
-        <div class="ops-title">
-          <h2>Event Inspector</h2>
-          <span id="selectedEventBadge" class="badge role">Live</span>
-        </div>
-        <dl class="kv ops-kv">
-          <dt>State</dt><dd id="inspectorState">NO_DATA</dd>
-          <dt>Mode</dt><dd id="inspectorMode">-</dd>
-          <dt>Roll cmd</dt><dd id="inspectorRollCmd">0.0 deg</dd>
-          <dt>Pitch cmd</dt><dd id="inspectorPitchCmd">0.0 deg</dd>
-          <dt>Yaw cmd</dt><dd id="inspectorYawCmd">0.0 deg/s</dd>
-          <dt>Gimbal proxy</dt><dd id="inspectorGimbal">0.0 deg</dd>
-          <dt>Compass</dt><dd id="inspectorCompass">NOT_STARTED</dd>
-          <dt>EEPROM</dt><dd id="inspectorEeprom">-</dd>
-        </dl>
-        <div id="eventList" class="event-list"></div>
-      </aside>
     </section>
 
-    <section class="panel graph-panel telemetry-only">
+    <section class="panel graph-panel data-view">
       <div class="tabs" id="chartTabs"></div>
       <canvas id="telemetryChart"></canvas>
       <div class="series" id="seriesToggles"></div>
@@ -137,7 +93,7 @@
       </div>
     </section>
 
-    <aside class="panel side-panel telemetry-only">
+    <aside class="panel side-panel telemetry-detail data-view">
       <h2>Motor Output</h2>
       <div id="motorBars"></div>
       <h2>RC Input</h2>
@@ -162,7 +118,7 @@
       </div>
     </aside>
 
-    <section class="panel telemetry-only">
+    <section class="panel telemetry-detail data-view">
       <h2>PID Gains</h2>
       <div id="pidGrid" class="pid-grid"></div>
       <div class="button-row">
@@ -174,7 +130,7 @@
       <p id="pidMessage" class="form-error"></p>
     </section>
 
-    <section class="panel telemetry-only">
+    <section class="panel telemetry-detail data-view">
       <h2>Sensor Fusion</h2>
       <dl class="kv">
         <dt>Roll</dt><dd id="fusionRoll">0.00 deg</dd>
@@ -192,7 +148,7 @@
       </dl>
     </section>
 
-    <section class="panel telemetry-only">
+    <section class="panel telemetry-detail data-view">
       <h2>System State</h2>
       <dl class="kv">
         <dt>State</dt><dd id="systemState">NO_DATA</dd>
@@ -210,8 +166,8 @@
       </dl>
     </section>
 
-    <section class="panel analysis-panel telemetry-only">
-      <h2>Flight Analysis</h2>
+    <section class="panel analysis-panel data-view">
+      <h2>Telemetry Analysis</h2>
       <div class="analysis-grid">
         <span><b id="analysisSamples">0</b><small>Samples</small></span>
         <span><b id="analysisRate">0.0 Hz</b><small>Rate</small></span>
@@ -227,22 +183,22 @@
       </div>
     </section>
 
-    <section class="panel fields-panel telemetry-only">
-      <h2>Telemetry Fields</h2>
+    <section class="panel fields-panel data-view">
+      <h2>Current Fields</h2>
       <div id="fieldCatalog" class="field-catalog"></div>
     </section>
 
-    <section class="panel live-table-panel telemetry-only">
-      <div class="live-table-header">
+    <details class="panel live-table-panel data-view" {% if view == 'telemetry' %}open{% endif %}>
+      <summary class="live-table-header">
         <h2>All Live Telemetry</h2>
         <div class="live-table-stats">
           <span><b id="livePacketRate">0.0</b> Hz</span>
           <span><b id="livePacketCount">0</b> packets</span>
           <span id="liveLastPacket">No packet</span>
         </div>
-      </div>
+      </summary>
       <div class="live-field-table" id="liveFieldTable"></div>
-    </section>
+    </details>
 
     <section class="network-console network-only">
       <div class="network-card">
@@ -296,7 +252,7 @@
       </div>
     </section>
 
-    <section class="panel controls-panel telemetry-only">
+    <section class="panel controls-panel telemetry-detail data-view">
       <div>
         <button id="killButton" class="kill-button" {% if not rms_kill_enabled %}disabled title="RMS kill not commissioned"{% endif %}>Emergency kill</button>
         <small>{% if rms_kill_enabled %}Immediately disarms all motors.{% else %}RMS kill is disabled; use transmitter CH6.{% endif %}</small>
@@ -315,7 +271,7 @@
   </main>
 
   <footer class="footer">
-    <span>TP-ARC 2026.06-rev01.6</span>
+    <span>TP-ARC 2026.06-rev01.7</span>
     <span>TLS <b id="tlsStatus">active</b></span>
     <span>Role {{ user.role }}</span>
     <span id="sessionCountdown">30:00</span>

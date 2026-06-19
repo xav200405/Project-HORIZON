@@ -3,10 +3,19 @@
 This folder packages the Project HORIZON TP-ARC Remote Monitoring System as a
 small Raspberry Pi service.
 
-Copy this folder to the Raspberry Pi, then run:
+## Install
+
+1. Copy or extract this package on the Raspberry Pi.
+
+2. Enter the package folder:
 
 ```bash
-cd app
+cd tparc-rms-pi-app
+```
+
+3. Run the installer:
+
+```bash
 sudo bash install.sh
 ```
 
@@ -27,25 +36,47 @@ The installer also adds the service user to `dialout` when that group exists,
 so USB serial devices such as `/dev/ttyACM0` can be opened by the service.
 Reboot if serial access is still denied after install.
 
-After install:
+4. Check service status:
 
 ```bash
 sudo systemctl status tparc-rms
+```
+
+5. Follow logs if needed:
+
+```bash
 journalctl -u tparc-rms -f
 ```
 
-Open:
+6. Find the Pi IP:
+
+```bash
+hostname -I
+```
+
+7. Open this URL from a browser on the same network:
 
 ```text
 http://<raspberry-pi-ip>:5000/login
 ```
 
+8. Log in as `tparc` / `tparc0322`, then change default passwords in Settings.
+
 ## Update
 
-When you receive a newer TP-ARC RMS package, extract it on the Pi and run:
+Manual update:
+
+1. Extract the newer package on the Pi.
+
+2. Enter the extracted folder:
 
 ```bash
 cd tparc-rms-pi-app
+```
+
+3. Run the local updater:
+
+```bash
 sudo bash update.sh
 ```
 
@@ -54,7 +85,12 @@ Update replaces the app launcher, refreshes Python packages inside
 `tparc-rms.service`. It preserves `/etc/tparc-rms/tparc-rms.env` and
 `/var/lib/tparc-rms`.
 
-For automatic GitHub updates from `xav200405/Project-HORIZON`, run:
+Automatic GitHub update:
+
+1. Make sure the newest package exists as a GitHub Release asset, or is
+   committed somewhere under `dashboard/`.
+
+2. Run:
 
 ```bash
 sudo bash /opt/tparc-rms/update.sh
@@ -84,8 +120,20 @@ Change these from Settings before field or shared-network use.
 
 Admins can open Firmware from the top navigation to upload `.ino` sketches or
 zipped Arduino sketch folders to the flight controller through the Raspberry
-Pi's USB serial connection. Select the detected serial port, choose the board
-FQBN, then compile or compile and upload.
+Pi's USB serial connection.
+
+Step-by-step:
+
+1. Connect the Arduino to the Raspberry Pi over USB.
+2. Log in as an admin.
+3. Open Firmware.
+4. Confirm that `arduino-cli` is ready.
+5. Select the detected serial port.
+6. Choose the board FQBN.
+7. Upload a `.ino` file or zipped Arduino sketch folder.
+8. Use Compile only first for a new sketch.
+9. Run Compile and upload when ready.
+10. Read the upload log.
 
 The installer tries to install `arduino-cli`, `avrdude`, and the common
 `arduino:avr` core for Uno/Nano/Mega targets. If your Pi OS image does not
@@ -115,6 +163,60 @@ TPARC_PORT=5000
 TPARC_SESSION_MINUTES=30
 TPARC_RMS_KILL_ENABLED=0
 ```
+
+After editing config:
+
+```bash
+sudo systemctl restart tparc-rms
+```
+
+## Page Guide
+
+| Page | Use It For |
+| --- | --- |
+| Overview | Client-presentable live telemetry summary, graph, analysis, and current fields. |
+| Telemetry | Detailed engineering view with graphs, PID, motors, RC input, exports, and raw values. |
+| Network | Serial and browser link health. |
+| Firmware | Admin-only Arduino sketch compile/upload through the Pi. |
+| Settings | Users, roles, audit log, thresholds, and calibration trigger. |
+
+## Troubleshooting
+
+### Browser Cannot Connect
+
+Check the Pi IP:
+
+```bash
+hostname -I
+```
+
+Check the service:
+
+```bash
+sudo systemctl status tparc-rms
+```
+
+### Serial Shows Simulated Data
+
+List ports:
+
+```bash
+python3 -m serial.tools.list_ports
+```
+
+Set `TPARC_SERIAL_PORT` in `/etc/tparc-rms/tparc-rms.env`, then restart.
+
+### Firmware Upload Cannot Find Arduino CLI
+
+Check:
+
+```bash
+which arduino-cli
+arduino-cli version
+```
+
+If it is installed in a custom location, set `TPARC_ARDUINO_CLI` in
+`/etc/tparc-rms/tparc-rms.env`.
 
 If you do not want the installer to run `apt-get`, set:
 

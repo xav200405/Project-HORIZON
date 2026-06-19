@@ -26,10 +26,11 @@ in the safety advisory.
   behavior.
 - Arduino serial calibration wizard for IMU, compass, barometer, RC, ESC, and
   EEPROM-backed calibration data.
-- Raspberry Pi RMS with live telemetry, networking telemetry, account
-  management, data recording, export tools, charts, audit logs, and
-  FlightHub-inspired operational views.
-- A one-file Raspberry Pi launcher for simpler field deployment.
+- Raspberry Pi RMS with a client-presentable telemetry overview, detailed live
+  graphs, networking telemetry, account management, data recording, exports,
+  audit logs, and admin firmware upload.
+- An installable Raspberry Pi RMS app package plus a one-file launcher for
+  temporary runs.
 - Static validation tooling and documentation for future UAV adaptation.
 
 ## Project Origin
@@ -48,32 +49,60 @@ Unit #03-22, Aviation Research Centre.
 
 More detail is in [docs/REPOSITORY_STRUCTURE.md](docs/REPOSITORY_STRUCTURE.md).
 
-## Which File Do I Run?
+## Start Here
 
-For the Raspberry Pi RMS, run exactly:
+For a complete walkthrough, use
+[docs/STEP_BY_STEP_GUIDE.md](docs/STEP_BY_STEP_GUIDE.md). It covers:
 
-```bash
-python3 dashboard/deploy/raspberry_pi/TP_ARC_RMS_single.py
-```
-
-For local dashboard source development only, run:
-
-```bash
-python dashboard/run.py
-```
+- Installing the RMS on a Raspberry Pi.
+- Opening the dashboard and changing default passwords.
+- Configuring the Arduino serial port.
+- Reading telemetry through Overview, Telemetry, and Network pages.
+- Uploading Arduino firmware remotely through the Pi.
+- Updating the app from GitHub.
+- Building new Pi packages from source.
+- Troubleshooting common serial, browser, update, and firmware issues.
 
 ## Raspberry Pi RMS Quick Start
 
-Copy the repository or at least `dashboard/deploy/raspberry_pi/TP_ARC_RMS_single.py` to
-the Raspberry Pi, then run from the repository root:
+Build the installable app package:
 
 ```bash
-python3 dashboard/deploy/raspberry_pi/TP_ARC_RMS_single.py
+cd dashboard/deploy/raspberry_pi
+python3 build_pi_app_package.py
 ```
 
-The launcher unpacks the RMS to a per-user runtime folder, prepares
-dependencies when allowed, and starts the dashboard. Set
-`TPARC_SINGLE_RUNTIME=<runtime-dir>` to choose a different runtime location.
+Copy `dist/tparc-rms-pi-app-*.tar.gz` to the Raspberry Pi, then:
+
+```bash
+tar -xzf tparc-rms-pi-app-*.tar.gz
+cd tparc-rms-pi-app
+sudo bash install.sh
+```
+
+The installer creates a `tparc-rms.service` systemd service, starts it on boot,
+and stores configuration in `/etc/tparc-rms/tparc-rms.env`.
+
+Admins can use the Firmware page to compile and upload Arduino sketches to the
+flight controller through the Raspberry Pi USB serial link. The Pi package
+installs the RMS in a private virtual environment and attempts to install
+`arduino-cli` and `avrdude` for firmware uploads.
+
+To update an installed Pi later, extract the newer package and run:
+
+```bash
+cd tparc-rms-pi-app
+sudo bash update.sh
+```
+
+For automatic GitHub updates, publish the Pi package tarball as a release asset
+in `xav200405/Project-HORIZON`. If no matching release asset exists, the updater
+falls back to scanning under `dashboard` for `tparc-rms-pi-app-*.tar.gz`, so
+future folders such as `dashboard/2026.REV01.1/dist` do not require Pi config
+changes. The packaged config already sets
+`TPARC_UPDATE_REPO=xav200405/Project-HORIZON` and
+`TPARC_UPDATE_SOURCE_PATH=dashboard`, so an installed Pi can update itself with
+`sudo bash /opt/tparc-rms/update.sh`.
 
 Default bootstrap users are created on first run:
 
@@ -85,6 +114,10 @@ Default bootstrap users are created on first run:
 
 Change these credentials from the RMS Settings page before field use. Do not
 expose the RMS to untrusted networks while default credentials are active.
+
+For the step-by-step version of these instructions, including screenshots-to-use
+checkpoints and firmware upload workflow, read
+[docs/STEP_BY_STEP_GUIDE.md](docs/STEP_BY_STEP_GUIDE.md).
 
 ## Local RMS Development
 

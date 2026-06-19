@@ -3,29 +3,72 @@
 This folder is a standalone Raspberry Pi app drop for the Project HORIZON
 TP-ARC Remote Monitoring System.
 
-Use the ready-built archive:
+## Ready-Built Package
+
+Use this archive:
 
 ```bash
-dist/tparc-rms-pi-app-2026.06-rev01.6.tar.gz
+dist/tparc-rms-pi-app-2026.06-rev01.7.tar.gz
 ```
 
-On the Raspberry Pi:
+## Install On The Raspberry Pi
+
+1. Copy `dist/tparc-rms-pi-app-2026.06-rev01.7.tar.gz` to the Pi.
+
+2. Extract it:
 
 ```bash
-tar -xzf tparc-rms-pi-app-2026.06-rev01.6.tar.gz
+tar -xzf tparc-rms-pi-app-2026.06-rev01.7.tar.gz
+```
+
+3. Enter the extracted folder:
+
+```bash
 cd tparc-rms-pi-app
+```
+
+4. Install:
+
+```bash
 sudo bash install.sh
 ```
 
-This v1.5.1 drop adds the admin Firmware page. Admins can upload `.ino`
-sketches or zipped Arduino sketch folders through the Raspberry Pi server,
-compile with `arduino-cli`, and upload to the Arduino over USB serial. The RMS
-pauses telemetry serial access during the upload and restarts it afterward.
+5. Open:
+
+```text
+http://<raspberry-pi-ip>:5000/login
+```
+
+6. Log in as `tparc` / `tparc0322`.
+
+7. Change default passwords in Settings.
 
 The package installs the dashboard as `tparc-rms.service`, stores config in
 `/etc/tparc-rms/tparc-rms.env`, and stores runtime data in `/var/lib/tparc-rms`.
 
-For future updates with a newer package:
+## What This Release Adds
+
+- Cleaner client-presentable Overview page.
+- Detailed Telemetry page for full engineering data.
+- Network page for link health.
+- Admin Firmware page for remote Arduino sketch compile/upload.
+- GitHub-aware updater.
+
+## Upload Firmware Through The Pi
+
+1. Connect the Arduino to the Raspberry Pi over USB.
+2. Log in to RMS as an admin.
+3. Open Firmware.
+4. Select the detected serial port.
+5. Select the board FQBN.
+6. Upload a `.ino` file or zipped Arduino sketch folder.
+7. Use Compile only first.
+8. Run Compile and upload when ready.
+9. Review the upload log.
+
+The RMS pauses telemetry serial access during upload and restarts it afterward.
+
+## Update Later
 
 ```bash
 sudo bash /opt/tparc-rms/update.sh
@@ -41,3 +84,5 @@ To rebuild the archive from this folder:
 ```bash
 python3 build_pi_app_package.py
 ```
+
+For the full walkthrough, read `../../docs/STEP_BY_STEP_GUIDE.md`.

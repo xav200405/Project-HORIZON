@@ -1,17 +1,21 @@
 # TP-ARC Remote Monitoring System
 
-The TP-ARC Remote Monitoring System (RMS) is the Raspberry Pi ground-station dashboard for Project HORIZON. It reads telemetry from the Arduino flight controller over serial, records telemetry to SQLite, and serves browser pages for operations, detailed live telemetry, network health, settings, exports, and audit logs.
+The TP-ARC Remote Monitoring System (RMS) is the Raspberry Pi ground-station dashboard for Project HORIZON. It reads telemetry from the Arduino flight controller over serial, records telemetry to SQLite, and serves browser pages for a clean telemetry overview, detailed live telemetry, network health, firmware upload, settings, exports, and audit logs.
 
 This RMS is operator-support software, not certified aircraft safety
 equipment. Telemetry can be delayed, stale, disconnected, or wrong if the
 serial link, network, browser, or Raspberry Pi fails. Read
 `../docs/SAFETY_ADVISORY.md` before field use.
 
+For a full start-to-finish walkthrough, read
+`../docs/STEP_BY_STEP_GUIDE.md`.
+
 ## What You Get
 
-- FlightHub-style Operations page for mission monitoring and event marking.
-- Live Telemetry page with charts and every current telemetry field.
+- Client-presentable Overview page with key health values, graphs, analysis, and organized telemetry fields.
+- Live Telemetry page with charts, controls, raw values, and every current telemetry field.
 - Network page showing serial link health, packet rate, browser/socket status, packet age, and raw serial lines.
+- Admin Firmware page for compiling and uploading Arduino sketches through the Raspberry Pi.
 - Telemetry recording to SQLite.
 - CSV, JSON, PDF, and chart PNG export.
 - Login, roles, CSRF protection, audit log, and session timeout.
@@ -161,13 +165,13 @@ Change these before field use or network use.
 
 Roles:
 
-- `admin`: settings, user creation, command controls, exports, telemetry views.
+- `admin`: settings, firmware upload, user creation, command controls, exports, telemetry views.
 - `operator`: operations, markers, command controls, exports, telemetry views.
 - `viewer`: read-only monitoring.
 
 ## Dashboard Pages
 
-### Operations
+### Overview
 
 Path:
 
@@ -175,18 +179,16 @@ Path:
 /
 ```
 
-This is the main page. It is inspired by DJI FlightHub-style operator workflows, adapted to the TP-ARC telemetry we actually have.
+This is the main page. It is designed for client-presentable monitoring without
+overwhelming the viewer.
 
 Use it for:
 
-- Mission-level overview.
-- Relative telemetry trace.
-- Aircraft heading cone.
-- Photo, Inspect, and Anomaly markers.
-- Event inspector.
-- Basic state, heading, attitude, battery, and loop-rate status.
-
-Important: until GPS/location telemetry exists in the firmware, the route display is a relative telemetry trace, not a real geospatial map.
+- Battery, heading, attitude, and loop-rate status.
+- Main telemetry graph.
+- Telemetry analysis summary.
+- Current fields.
+- Collapsible full live telemetry table.
 
 ### Live Telemetry
 
@@ -238,6 +240,32 @@ It includes:
 - Server/client time delta.
 - Last raw serial line.
 - Recent link events.
+
+### Firmware
+
+Path:
+
+```text
+/firmware
+```
+
+Admin-only page for remote Arduino firmware upload through the Raspberry Pi.
+
+Step-by-step workflow:
+
+1. Connect the Arduino to the Raspberry Pi over USB.
+2. Log in as an admin.
+3. Open Firmware.
+4. Confirm `arduino-cli` is ready.
+5. Select the Arduino serial port.
+6. Select the board FQBN.
+7. Upload a `.ino` file or zipped Arduino sketch folder.
+8. Use Compile only first when testing a new sketch.
+9. Run Compile and upload when ready.
+10. Read the upload log for compiler and uploader output.
+
+During firmware upload, the RMS pauses its telemetry serial reader, gives the
+USB serial port to `arduino-cli`, then restarts telemetry afterward.
 
 ### Settings
 
@@ -326,7 +354,6 @@ Available exports:
 
 Markers:
 
-- Operations page buttons add Photo, Inspect, and Anomaly markers.
 - Telemetry page has a free-form Mark button.
 - Markers are recorded into the telemetry database.
 

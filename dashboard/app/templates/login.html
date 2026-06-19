@@ -9,10 +9,16 @@
 </head>
 <body class="login-body">
   <main class="login-shell">
+    <section class="login-brand-panel">
+      <img class="login-crest" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
+      <div>
+        <p class="eyebrow">Project HORIZON</p>
+        <h1>TP-ARC ground station</h1>
+      </div>
+    </section>
     <form class="login-panel" method="post">
-      <img class="login-logo" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
-      <h1>TP-ARC ground station</h1>
-      <label>Username <input name="username" autocomplete="username" required></label>
+      <h2>Sign in</h2>
+      <label>Username <input name="username" autocomplete="username" required autofocus></label>
       <label>Password <input name="password" type="password" autocomplete="current-password" required></label>
       {% if message %}<p class="form-error">{{ message }}</p>{% endif %}
       <button type="submit">Sign in</button>

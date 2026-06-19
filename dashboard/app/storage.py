@@ -76,7 +76,7 @@ def store_telemetry(db_path, payload):
         )
 
 
-def telemetry_rows(db_path, start_ts=None, end_ts=None):
+def telemetry_rows(db_path, start_ts=None, end_ts=None, limit=None):
     query = "SELECT timestamp,payload FROM telemetry WHERE 1=1"
     args = []
     if start_ts is not None:
@@ -85,15 +85,20 @@ def telemetry_rows(db_path, start_ts=None, end_ts=None):
     if end_ts is not None:
         query += " AND timestamp <= ?"
         args.append(end_ts)
-    query += " ORDER BY timestamp ASC"
+    if limit is not None:
+        query += " ORDER BY timestamp DESC LIMIT ?"
+        args.append(limit)
+    else:
+        query += " ORDER BY timestamp ASC"
     with db(db_path) as conn:
-        return list(conn.execute(query, args))
+        rows = list(conn.execute(query, args))
+    if limit is not None:
+        rows.reverse()
+    return rows
 
 
 def telemetry_payloads(db_path, start_ts=None, end_ts=None, limit=None):
-    rows = telemetry_rows(db_path, start_ts, end_ts)
-    if limit is not None and len(rows) > limit:
-        rows = rows[-limit:]
+    rows = telemetry_rows(db_path, start_ts, end_ts, limit)
     payloads = []
     for row in rows:
         try:
@@ -127,7 +132,7 @@ def export_json(db_path, start_ts=None, end_ts=None):
 
 
 def telemetry_summary(db_path, start_ts=None, end_ts=None):
-    rows = telemetry_payloads(db_path, start_ts, end_ts)
+    rows = telemetry_payloads(db_path, start_ts, end_ts, 2400)
     if not rows:
         return {
             "count": 0,

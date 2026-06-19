@@ -53,8 +53,12 @@ def network_page():
 @role_required("admin")
 def settings():
     with db(current_app.config["DATABASE"]) as conn:
-        users = list(conn.execute("SELECT id,username,role,created_at FROM users ORDER BY username"))
-        logs = list(conn.execute("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 100"))
+        users = [dict(row) for row in conn.execute("SELECT id,username,role,created_at FROM users ORDER BY username")]
+        logs = [dict(row) for row in conn.execute("SELECT * FROM audit_log ORDER BY timestamp DESC LIMIT 100")]
+    for row in users:
+        row["created_at_label"] = time.strftime("%Y-%m-%d %H:%M", time.localtime(row["created_at"]))
+    for row in logs:
+        row["timestamp_label"] = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(row["timestamp"]))
     return render_template("settings.html", user=current_user(), csrf=session["csrf"], users=users, logs=logs)
 
 
@@ -86,7 +90,7 @@ def _time_window_args():
 @login_required
 def telemetry_recent():
     start, end = _time_window_args()
-    limit = min(5000, int(request.args.get("limit", "1200")))
+    limit = min(2400, int(request.args.get("limit", "600")))
     return {"rows": telemetry_payloads(current_app.config["DATABASE"], start, end, limit)}
 
 

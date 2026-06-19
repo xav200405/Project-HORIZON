@@ -1,0 +1,22 @@
+[Unit]
+Description=TP-ARC Remote Monitoring System
+Documentation=file:/opt/tparc-rms/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=__TPARC_USER__
+Group=__TPARC_GROUP__
+WorkingDirectory=/opt/tparc-rms
+EnvironmentFile=/etc/tparc-rms/tparc-rms.env
+ExecStart=/opt/tparc-rms/venv/bin/python /opt/tparc-rms/TP_ARC_RMS_single.py
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ReadWritePaths=/var/lib/tparc-rms /opt/tparc-rms /etc/tparc-rms
+
+[Install]
+WantedBy=multi-user.target

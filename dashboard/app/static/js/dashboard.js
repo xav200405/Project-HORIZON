@@ -1,7 +1,16 @@
 const role = document.body.dataset.role;
 const csrf = document.body.dataset.csrf;
+const currentView = document.body.dataset.view || "ops";
 const rmsKillEnabled = Boolean(window.RMS_KILL_ENABLED);
-const socket = io();
+const socketAvailable = typeof window.io === "function";
+const socket = socketAvailable
+  ? io()
+  : {
+      connected: false,
+      id: "",
+      io: { engine: { transport: { name: "api-poll" } } },
+      on() {},
+    };
 const history = [];
 let activeTab = "Attitude";
 let windowSeconds = 60;
@@ -17,6 +26,15 @@ let telemetryPacketCount = 0;
 let packetTimes = [];
 let networkEvents = [];
 let lastTelemetryArrival = 0;
+let lastStateTimestamp = 0;
+let chartUpdatePending = false;
+let lastChartRender = 0;
+let lastFieldCatalogRender = 0;
+let lastLiveTableRender = 0;
+const CHART_FRAME_MS = 150;
+const FIELD_FRAME_MS = 900;
+const TABLE_FRAME_MS = 700;
+const MAX_HISTORY_POINTS = 7200;
 
 const tabs = {
   Attitude: [["roll", "Roll"], ["pitch", "Pitch"], ["yaw", "Heading"], ["heading_error", "Head err"]],
@@ -34,21 +52,227 @@ const tabs = {
 const enabledSeries = new Set();
 Object.values(tabs).flat().forEach(([key]) => enabledSeries.add(key));
 
-const chart = new Chart(document.getElementById("telemetryChart"), {
-  type: "line",
-  data: { datasets: [] },
-  options: {
-    animation: false,
-    responsive: true,
-    maintainAspectRatio: false,
-    parsing: false,
-    scales: {
-      x: { type: "linear", ticks: { callback: v => `${Math.round((Date.now()/1000)-v)}s` } },
-      y: { beginAtZero: false },
-    },
-    plugins: { legend: { display: false }, tooltip: { mode: "nearest", intersect: false } },
-  },
-});
+const fieldLabels = {
+  timestamp: "Received",
+  packet_type: "Packet",
+  controller_ms: "Controller clock",
+  heading_setpoint: "Heading setpoint",
+  heading_error: "Heading error",
+  heading_lock: "Heading lock",
+  gyro_roll_rate: "Gyro roll",
+  gyro_pitch_rate: "Gyro pitch",
+  gyro_yaw_rate: "Gyro yaw",
+  roll_cmd: "Roll command",
+  pitch_cmd: "Pitch command",
+  yaw_cmd: "Yaw command",
+  pid_roll: "PID roll output",
+  pid_pitch: "PID pitch output",
+  pid_yaw: "PID yaw output",
+  pid_roll_p: "Roll Kp",
+  pid_roll_i: "Roll Ki",
+  pid_roll_d: "Roll Kd",
+  pid_pitch_p: "Pitch Kp",
+  pid_pitch_i: "Pitch Ki",
+  pid_pitch_d: "Pitch Kd",
+  pid_yaw_p: "Yaw Kp",
+  pid_yaw_i: "Yaw Ki",
+  pid_yaw_d: "Yaw Kd",
+  rx_ok: "Receiver",
+  imu_ok: "IMU",
+  sensors_ok: "Sensors",
+  gyro_calibrated: "Gyro calibrated",
+  compass_ok: "Compass",
+  compass_status: "Compass status",
+  compass_driver: "Compass driver",
+  compass_chip_id: "Compass chip",
+  compass_bad_reason: "Compass fault",
+  compass_flatline_count: "Compass flatline",
+  mag_x: "Mag X",
+  mag_y: "Mag Y",
+  mag_z: "Mag Z",
+  mode_cap: "Mode cap",
+  loop_overrun: "Loop overrun",
+  motor_front_left: "Motor front left",
+  motor_front_right: "Motor front right",
+  motor_back_left: "Motor back left",
+  motor_back_right: "Motor back right",
+  battery_voltage: "Battery",
+  battery_cell_voltage: "Cell voltage",
+  battery_soc: "Battery SOC",
+  battery_alarm: "Battery alarm",
+  battery_valid: "Battery data",
+};
+
+const fieldUnits = {
+  roll: "deg",
+  pitch: "deg",
+  yaw: "deg",
+  heading: "deg",
+  heading_setpoint: "deg",
+  heading_error: "deg",
+  gyro_roll_rate: "deg/s",
+  gyro_pitch_rate: "deg/s",
+  gyro_yaw_rate: "deg/s",
+  roll_cmd: "deg",
+  pitch_cmd: "deg",
+  yaw_cmd: "deg/s",
+  battery_voltage: "V",
+  battery_cell_voltage: "V/cell",
+  battery_soc: "%",
+  throttle: "",
+  rc_roll: "",
+  rc_pitch: "",
+  rc_yaw: "",
+  m1: "us",
+  m2: "us",
+  m3: "us",
+  m4: "us",
+  d6: "us",
+  d9: "us",
+  d10: "us",
+  d11: "us",
+  motor_front_left: "us",
+  motor_front_right: "us",
+  motor_back_left: "us",
+  motor_back_right: "us",
+  controller_ms: "ms",
+};
+
+const booleanFields = new Set([
+  "armed", "lockout", "rx_ok", "imu_ok", "sensors_ok", "gyro_calibrated",
+  "compass_ok", "heading_lock", "battery_valid", "loop_overrun",
+]);
+
+class TelemetryChart {
+  constructor(canvas) {
+    this.canvas = canvas;
+    this.ctx = canvas.getContext("2d");
+    this.data = { datasets: [] };
+    this.options = { scales: { x: {}, y: {} } };
+    this.dpr = window.devicePixelRatio || 1;
+    window.addEventListener("resize", () => this.update());
+  }
+
+  resize() {
+    const rect = this.canvas.getBoundingClientRect();
+    const width = Math.max(320, Math.floor(rect.width * this.dpr));
+    const height = Math.max(220, Math.floor(rect.height * this.dpr));
+    if (this.canvas.width !== width || this.canvas.height !== height) {
+      this.canvas.width = width;
+      this.canvas.height = height;
+    }
+    return { width, height };
+  }
+
+  finitePoints() {
+    return this.data.datasets.flatMap(dataset =>
+      dataset.data
+        .map(point => ({ x: Number(point.x), y: Number(point.y), dataset }))
+        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y))
+    );
+  }
+
+  bounds(points) {
+    const xScale = this.options.scales.x || {};
+    const yScale = this.options.scales.y || {};
+    const xs = points.map(point => point.x);
+    const ys = points.map(point => point.y);
+    const now = Date.now() / 1000;
+    const xMin = Number.isFinite(xScale.min) ? xScale.min : (xs.length ? Math.min(...xs) : now - 60);
+    const xMax = Number.isFinite(xScale.max) ? xScale.max : (xs.length ? Math.max(...xs) : now);
+    let yMin = Number.isFinite(yScale.min) ? yScale.min : (ys.length ? Math.min(...ys) : -1);
+    let yMax = Number.isFinite(yScale.max) ? yScale.max : (ys.length ? Math.max(...ys) : 1);
+    if (yMin === yMax) {
+      const pad = Math.max(1, Math.abs(yMin) * 0.08);
+      yMin -= pad;
+      yMax += pad;
+    } else if (!Number.isFinite(yScale.min) || !Number.isFinite(yScale.max)) {
+      const pad = Math.max((yMax - yMin) * 0.12, 0.5);
+      if (!Number.isFinite(yScale.min)) yMin -= pad;
+      if (!Number.isFinite(yScale.max)) yMax += pad;
+    }
+    return { xMin, xMax: xMax <= xMin ? xMin + 1 : xMax, yMin, yMax };
+  }
+
+  update() {
+    const { width, height } = this.resize();
+    const ctx = this.ctx;
+    const pad = { left: 56 * this.dpr, right: 16 * this.dpr, top: 24 * this.dpr, bottom: 34 * this.dpr };
+    const plotW = Math.max(1, width - pad.left - pad.right);
+    const plotH = Math.max(1, height - pad.top - pad.bottom);
+    const points = this.finitePoints();
+    const bounds = this.bounds(points);
+
+    ctx.clearRect(0, 0, width, height);
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, width, height);
+    ctx.strokeStyle = "#e5e7eb";
+    ctx.lineWidth = 1 * this.dpr;
+    ctx.font = `${12 * this.dpr}px Segoe UI, Arial`;
+    ctx.fillStyle = "#667085";
+
+    for (let i = 0; i <= 4; i += 1) {
+      const y = pad.top + (plotH * i) / 4;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(width - pad.right, y);
+      ctx.stroke();
+      const value = bounds.yMax - ((bounds.yMax - bounds.yMin) * i) / 4;
+      ctx.fillText(formatAxisValue(value), 8 * this.dpr, y + 4 * this.dpr);
+    }
+    for (let i = 0; i <= 5; i += 1) {
+      const x = pad.left + (plotW * i) / 5;
+      ctx.beginPath();
+      ctx.moveTo(x, pad.top);
+      ctx.lineTo(x, height - pad.bottom);
+      ctx.stroke();
+      const value = bounds.xMin + ((bounds.xMax - bounds.xMin) * i) / 5;
+      ctx.fillText(`${Math.max(0, Math.round((Date.now() / 1000) - value))}s`, x - 10 * this.dpr, height - 10 * this.dpr);
+    }
+
+    if (!points.length) {
+      ctx.fillStyle = "#667085";
+      ctx.textAlign = "center";
+      ctx.fillText("Waiting for telemetry", width / 2, height / 2);
+      ctx.textAlign = "left";
+      return;
+    }
+
+    const toX = value => pad.left + ((value - bounds.xMin) / (bounds.xMax - bounds.xMin)) * plotW;
+    const toY = value => pad.top + (1 - ((value - bounds.yMin) / (bounds.yMax - bounds.yMin))) * plotH;
+    this.data.datasets.forEach(dataset => {
+      const series = dataset.data
+        .map(point => ({ x: Number(point.x), y: Number(point.y) }))
+        .filter(point => Number.isFinite(point.x) && Number.isFinite(point.y));
+      if (!series.length) return;
+      ctx.strokeStyle = dataset.borderColor;
+      ctx.lineWidth = (dataset.borderWidth || 2) * this.dpr;
+      ctx.beginPath();
+      series.forEach((point, index) => {
+        const x = toX(point.x);
+        const y = toY(point.y);
+        if (index === 0) ctx.moveTo(x, y);
+        else ctx.lineTo(x, y);
+      });
+      ctx.stroke();
+    });
+
+    let legendX = pad.left;
+    this.data.datasets.forEach(dataset => {
+      ctx.fillStyle = dataset.borderColor;
+      ctx.fillRect(legendX, 7 * this.dpr, 10 * this.dpr, 10 * this.dpr);
+      ctx.fillStyle = "#17202a";
+      ctx.fillText(dataset.label, legendX + 14 * this.dpr, 16 * this.dpr);
+      legendX += (dataset.label.length * 7 + 34) * this.dpr;
+    });
+  }
+
+  toBase64Image() {
+    return this.canvas.toDataURL("image/png");
+  }
+}
+
+const chart = new TelemetryChart(document.getElementById("telemetryChart"));
 
 function qs(id) { return document.getElementById(id); }
 function fixed(value, digits) {
@@ -78,6 +302,51 @@ function escapeHtml(value) {
 function secondsText(value) {
   if (value === null || value === undefined || !Number.isFinite(Number(value))) return "-";
   return `${fixed(Number(value), Number(value) < 10 ? 2 : 1)}s`;
+}
+function formatAxisValue(value) {
+  const abs = Math.abs(Number(value));
+  if (abs >= 1000) return fixed(value, 0);
+  if (abs >= 100) return fixed(value, 1);
+  return fixed(value, 2);
+}
+function numericValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
+}
+function formatFieldName(key) {
+  if (fieldLabels[key]) return fieldLabels[key];
+  return String(key)
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, char => char.toUpperCase());
+}
+function formatTelemetryValue(key, value) {
+  if (key === "timestamp") {
+    return new Date((Number(value) || Date.now() / 1000) * 1000).toLocaleTimeString();
+  }
+  if (value === undefined || value === null || value === "") return "-";
+  if (booleanFields.has(key)) return Number(value) ? "Yes" : "No";
+  if (Array.isArray(value)) return value.join(", ");
+  if (typeof value === "object") return JSON.stringify(value);
+  const unit = fieldUnits[key];
+  const number = Number(value);
+  if (Number.isFinite(number) && typeof value !== "string") {
+    const digits = Math.abs(number) >= 100 || Number.isInteger(number) ? 0 : 2;
+    return unit !== undefined && unit !== "" ? `${fixed(number, digits)} ${unit}` : fixed(number, digits);
+  }
+  return unit ? `${value} ${unit}` : String(value);
+}
+function scheduleChartUpdate() {
+  if (chartUpdatePending) return;
+  chartUpdatePending = true;
+  const elapsed = performance.now() - lastChartRender;
+  const delay = Math.max(0, CHART_FRAME_MS - elapsed);
+  setTimeout(() => {
+    requestAnimationFrame(() => {
+      chartUpdatePending = false;
+      lastChartRender = performance.now();
+      updateChart();
+    });
+  }, delay);
 }
 function addNetworkEvent(kind, value) {
   networkEvents.push({ kind, value, time: new Date().toLocaleTimeString() });
@@ -116,12 +385,12 @@ function renderTabs() {
 function updateChart() {
   const now = Date.now() / 1000;
   const minTime = windowSeconds === "full" ? 0 : now - windowSeconds;
-  const points = history.filter(p => p.timestamp >= minTime);
+  const points = history.filter(p => Number(p.timestamp) >= minTime);
   chart.data.datasets = tabs[activeTab]
     .filter(([key]) => enabledSeries.has(key))
     .map(([key, label], index) => ({
       label,
-      data: downsample(points.map(p => ({ x: p.timestamp, y: p[key] ?? null }))),
+      data: downsample(points.map(p => ({ x: Number(p.timestamp), y: numericValue(p[key]) }))),
       borderColor: ["#1f6feb", "#138a4b", "#bd1e1e", "#b56b00"][index % 4],
       pointRadius: 0,
       borderWidth: 2,
@@ -208,13 +477,15 @@ function positionDot(id, x, y) {
 }
 
 function updateTelemetry(data) {
+  if (!data || !Number.isFinite(Number(data.timestamp))) return;
+  lastStateTimestamp = Math.max(lastStateTimestamp, Number(data.timestamp));
   telemetryPacketCount += 1;
   const nowPacket = Date.now() / 1000;
   lastTelemetryArrival = nowPacket;
   packetTimes.push(nowPacket);
   packetTimes = packetTimes.filter(t => nowPacket - t <= 2.0);
   history.push(data);
-  while (history.length > 18000) history.shift();
+  while (history.length > MAX_HISTORY_POINTS) history.shift();
   if (data.marker && !missionEvents.some(event => event.timestamp === data.timestamp && event.label === data.marker)) {
     missionEvents.push({ id: `event-${Date.now()}`, label: data.marker, type: "MARK", timestamp: data.timestamp, snapshot: data });
     missionEvents = missionEvents.slice(-40);
@@ -243,23 +514,36 @@ function updateTelemetry(data) {
   qs("magXValue").textContent = fmt(data.mag_x, 0);
   qs("magYValue").textContent = fmt(data.mag_y, 0);
   qs("magZValue").textContent = fmt(data.mag_z, 0);
-  updateSystemState(data);
-  updatePidFromTelemetry(data);
-  updateFieldCatalog(data);
-  updateLiveTelemetryTable(data);
+  if (currentView === "telemetry") {
+    updateSystemState(data);
+    updatePidFromTelemetry(data);
+    const uiNow = performance.now();
+    if (uiNow - lastFieldCatalogRender >= FIELD_FRAME_MS) {
+      lastFieldCatalogRender = uiNow;
+      updateFieldCatalog(data);
+    }
+    if (uiNow - lastLiveTableRender >= TABLE_FRAME_MS) {
+      lastLiveTableRender = uiNow;
+      updateLiveTelemetryTable(data);
+    }
+  }
   updateNetworkFromTelemetry(data);
-  updateMissionConsole(data);
+  if (currentView === "ops") updateMissionConsole(data);
   qs("rawData").textContent = (data.raw_lines || [data.raw || ""]).join("\n");
   updateBattery(data);
-  updateMotors(data);
-  updateSticks(data);
-  requestAnimationFrame(updateChart);
+  if (currentView === "telemetry") {
+    updateMotors(data);
+    updateSticks(data);
+    scheduleChartUpdate();
+  }
 }
 
 function updateNetworkFromTelemetry(data) {
+  const age = (Date.now() / 1000) - (data.timestamp || Date.now() / 1000);
+  qs("latency").textContent = `${fixed(Math.max(0, age * 1000), 0)} ms`;
   qs("networkPacketRate").textContent = `${fixed(livePacketRate(), 1)} Hz`;
-  qs("networkPacketAge").textContent = secondsText((Date.now() / 1000) - (data.timestamp || Date.now() / 1000));
-  qs("networkLatencyValue").textContent = secondsText((Date.now() / 1000) - (data.timestamp || Date.now() / 1000));
+  qs("networkPacketAge").textContent = secondsText(age);
+  qs("networkLatencyValue").textContent = secondsText(age);
 }
 
 function livePacketRate() {
@@ -284,8 +568,8 @@ function updateLiveTelemetryTable(data) {
   const fields = [...new Set([...priority, ...(data.fields || []), ...Object.keys(data)])]
     .filter(key => !["raw_lines", "fields"].includes(key));
   table.innerHTML = fields.map(key => {
-    const value = key === "timestamp" ? new Date((data[key] || Date.now() / 1000) * 1000).toLocaleTimeString() : fmt(data[key], 4);
-    return `<div class="live-field"><b>${escapeHtml(key)}</b><span>${escapeHtml(value)}</span></div>`;
+    const value = formatTelemetryValue(key, data[key]);
+    return `<div class="live-field"><b title="${escapeHtml(key)}">${escapeHtml(formatFieldName(key))}</b><span>${escapeHtml(value)}</span></div>`;
   }).join("");
   qs("livePacketRate").textContent = fixed(livePacketRate(), 1);
   qs("livePacketCount").textContent = String(telemetryPacketCount);
@@ -298,6 +582,13 @@ function renderNetworkEvents() {
   box.innerHTML = networkEvents.slice().reverse().map(event => (
     `<div class="network-event"><b>${escapeHtml(event.kind)}</b><span>${escapeHtml(event.value)}</span><small>${escapeHtml(event.time)}</small></div>`
   )).join("");
+}
+
+function initializeConnectionMode() {
+  if (socketAvailable) return;
+  qs("connectionBadge").textContent = "API polling";
+  qs("connectionBadge").className = "badge amber";
+  addNetworkEvent("Browser", "using API polling");
 }
 
 async function refreshNetworkState() {
@@ -325,14 +616,49 @@ async function refreshNetworkState() {
   } catch (_) {
     addNetworkEvent("API", "network state unavailable");
   }
-  const connected = socket.connected;
-  qs("socketStatusBadge").textContent = connected ? "Connected" : "Disconnected";
-  qs("socketStatusBadge").className = `badge ${connected ? "green" : "red"}`;
+  const connected = socketAvailable && socket.connected;
+  qs("socketStatusBadge").textContent = connected ? "Connected" : socketAvailable ? "Disconnected" : "API polling";
+  qs("socketStatusBadge").className = `badge ${connected ? "green" : socketAvailable ? "red" : "amber"}`;
   qs("socketTransportValue").textContent = socket.io?.engine?.transport?.name || "-";
   qs("browserOnlineValue").textContent = navigator.onLine ? "online" : "offline";
   qs("socketIdValue").textContent = socket.id || "-";
   if (lastTelemetryArrival) {
     qs("networkPacketAge").textContent = secondsText((Date.now() / 1000) - lastTelemetryArrival);
+  }
+}
+
+async function hydrateRecentTelemetry() {
+  try {
+    const res = await fetch("/api/telemetry/recent?seconds=1800&limit=600");
+    if (!res.ok) return;
+    const data = await res.json();
+    const rows = Array.isArray(data.rows) ? data.rows : [];
+    const freshRows = rows
+      .filter(row => Number.isFinite(Number(row.timestamp)) && Number(row.timestamp) > lastStateTimestamp)
+      .slice(-MAX_HISTORY_POINTS);
+    if (!freshRows.length) return;
+    freshRows.slice(0, -1).forEach(row => history.push(row));
+    while (history.length > MAX_HISTORY_POINTS) history.shift();
+    const latest = freshRows[freshRows.length - 1];
+    lastStateTimestamp = Number(latest.timestamp);
+    updateTelemetry(latest);
+  } catch (_) {
+    // Live socket updates or the latest-state fallback can still keep the page useful.
+  }
+}
+
+async function refreshLatestStateFallback() {
+  const now = Date.now() / 1000;
+  if (socketAvailable && socket.connected && lastTelemetryArrival && now - lastTelemetryArrival < 3) return;
+  try {
+    const res = await fetch("/api/state");
+    if (!res.ok) return;
+    const data = await res.json();
+    const timestamp = Number(data.timestamp);
+    if (!Number.isFinite(timestamp) || timestamp <= lastStateTimestamp) return;
+    updateTelemetry(data);
+  } catch (_) {
+    // Network state polling will surface connection health separately.
   }
 }
 
@@ -560,7 +886,7 @@ function updateFieldCatalog(data) {
     .filter(key => !["raw", "raw_lines", "timestamp", "fields"].includes(key));
   qs("fieldCatalog").innerHTML = fields.map(key => {
     const value = data[key];
-    return `<span class="field-chip"><b>${key}</b><span>${fmt(value, 3)}</span></span>`;
+    return `<span class="field-chip"><b title="${escapeHtml(key)}">${escapeHtml(formatFieldName(key))}</b><span>${escapeHtml(formatTelemetryValue(key, value))}</span></span>`;
   }).join("");
 }
 
@@ -732,7 +1058,10 @@ setInterval(() => {
 document.addEventListener("click", () => { sessionStart = Date.now(); });
 setupTabs();
 setupControls();
+initializeConnectionMode();
+hydrateRecentTelemetry();
 refreshAnalysis();
 refreshNetworkState();
-setInterval(refreshAnalysis, 5000);
-setInterval(refreshNetworkState, 1000);
+setInterval(refreshLatestStateFallback, 1000);
+setInterval(refreshAnalysis, 15000);
+setInterval(refreshNetworkState, 2000);

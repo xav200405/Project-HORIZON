@@ -9,6 +9,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
+SOURCE_LAUNCHER = ROOT / "TP_ARC_RMS_single.py"
 LAUNCHER = APP_DIR / "TP_ARC_RMS_single.py"
 DIST_DIR = ROOT / "dist"
 PACKAGE_VERSION = "2026.06-rev01.5"
@@ -21,8 +22,10 @@ def app_version() -> str:
 
 
 def main() -> None:
-    if not LAUNCHER.exists():
-        raise SystemExit(f"Missing {LAUNCHER}")
+    if not SOURCE_LAUNCHER.exists():
+        raise SystemExit(f"Missing {SOURCE_LAUNCHER}")
+    if not LAUNCHER.exists() or LAUNCHER.read_bytes() != SOURCE_LAUNCHER.read_bytes():
+        LAUNCHER.write_bytes(SOURCE_LAUNCHER.read_bytes())
     DIST_DIR.mkdir(parents=True, exist_ok=True)
     package = DIST_DIR / f"tparc-rms-pi-app-{PACKAGE_VERSION}.tar.gz"
     with tarfile.open(package, "w:gz") as tar:

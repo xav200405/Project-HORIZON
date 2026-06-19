@@ -29,7 +29,46 @@ Change this password before field use or shared-network use. Usernames, password
 
 ## Recommended Raspberry Pi Setup
 
-Use the single-file launcher if you want the easiest Pi workflow:
+Use the installable Pi app package for field use:
+
+```bash
+cd dashboard/deploy/raspberry_pi
+python3 build_pi_app_package.py
+```
+
+Copy `dist/tparc-rms-pi-app-*.tar.gz` to the Raspberry Pi, then:
+
+```bash
+tar -xzf tparc-rms-pi-app-*.tar.gz
+cd tparc-rms-pi-app
+sudo bash install.sh
+```
+
+The installer creates a `tparc-rms.service` systemd service, starts it on boot,
+keeps configuration in `/etc/tparc-rms/tparc-rms.env`, and stores data in
+`/var/lib/tparc-rms`.
+
+To update an installed Pi with a newer package:
+
+```bash
+tar -xzf tparc-rms-pi-app-*.tar.gz
+cd tparc-rms-pi-app
+sudo bash update.sh
+```
+
+For automatic GitHub updates, publish the Pi package tarball as a release asset
+in `xav200405/Project-HORIZON`. If no matching release asset exists, the updater
+falls back to scanning under `dashboard` for `tparc-rms-pi-app-*.tar.gz`, so
+future folders such as `dashboard/2026.REV01.1/dist` do not require Pi config
+changes. The packaged config already sets
+`TPARC_UPDATE_REPO=xav200405/Project-HORIZON` and
+`TPARC_UPDATE_SOURCE_PATH=dashboard`, so an installed Pi can update itself with:
+
+```bash
+sudo bash /opt/tparc-rms/update.sh
+```
+
+Use the single-file launcher for temporary runs:
 
 ```bash
 python3 deploy/raspberry_pi/TP_ARC_RMS_single.py

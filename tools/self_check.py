@@ -93,7 +93,7 @@ def main():
 
     dash_checks = [
         ("WebSocket telemetry", r"socket\.on\(\"telemetry\""),
-        ("Chart.js usage", r"new Chart"),
+        ("telemetry chart renderer", r"new\s+(TelemetryChart|Chart)"),
         ("series toggles", r"enabledSeries"),
         ("downsampling", r"function downsample"),
         ("PID range validation", r"kp >= 0.*kp <= 1.*ki >= 0.*ki <= 0\.5.*kd >= 0.*kd <= 0\.5", re.S),
@@ -129,15 +129,15 @@ def main():
     namespace = {}
     exec(compile(read(parser_file), str(parser_file), "exec"), namespace)
     parsed = namespace["parse_telemetry_line"](
-        "TEL:FW=FC-0.8.0,REV=2026-06-17.8,R=1.20,P=-2.30,Y=15.4,MH=15.0,HM=HOLD,M1=1000,M2=1200,M3=1300,M4=1400,"
+        "TEL:FW=FC-0.8.1,REV=2026-06-19.1,R=1.20,P=-2.30,Y=15.4,MH=15.0,HM=HOLD,M1=1000,M2=1200,M3=1300,M4=1400,"
         "THR=0.25,RR=-0.05,RP=0.02,RY=0.00,PROLL=0.1,PPITCH=0.2,PYAW=0.3,"
         "BV=14.82,BCELL=3.71,BSOC=68,BALARM=0,BVALID=1,ARM=0,FS=0"
     )
     ok &= check("telemetry parser battery voltage", parsed["battery_voltage"] == 14.82)
     ok &= check("telemetry parser motor int", parsed["m4"] == 1400)
     ok &= check("telemetry parser heading mode", parsed["heading_mode"] == "HOLD")
-    ok &= check("telemetry parser firmware version", parsed["firmware_version"] == "FC-0.8.0")
-    ok &= check("telemetry parser firmware revision", parsed["firmware_revision"] == "2026-06-17.8")
+    ok &= check("telemetry parser firmware version", parsed["firmware_version"] == "FC-0.8.1")
+    ok &= check("telemetry parser firmware revision", parsed["firmware_revision"] == "2026-06-19.1")
     ok &= check("no stale TP_ARC sketch names", "TP_ARC_FlightController" not in all_project_text and "TP_ARC_CalibrationWizard" not in all_project_text)
 
     return 0 if ok else 1

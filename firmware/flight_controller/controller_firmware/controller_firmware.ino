@@ -16,6 +16,7 @@
       * Motor mixing for latest motor layout
       * EEPROM calibration loading from ARC Setup Module v6.5 with safe defaults
       * Receiver failsafe
+      * A0 battery voltage monitoring, telemetry, and emergency battery failsafe
       * LED status patterns
       * 5-second telemetry
 
@@ -57,12 +58,17 @@
 #include <Wire.h>
 #include <EEPROM.h>
 #include <math.h>
+#include <stdlib.h>
+#include <string.h>
 
 // ================================================================
 // CONFIGURATION
 // ================================================================
 
 #define STATUS_LED_PIN 13
+
+#define FIRMWARE_VERSION "FC-0.8.1"
+#define FIRMWARE_REVISION "2026-06-19.1"
 
 #define ESC1_PIN 6
 #define ESC2_PIN 9
@@ -75,6 +81,9 @@
 #define RX_CH4_PIN 4   // Yaw
 #define RX_CH5_PIN 3   // Flight mode
 #define RX_CH6_PIN 12  // Emergency lockout
+
+#define BATTERY_SENSE_PIN A0
+#define BATTERY_MONITOR_ENABLED true
 
 #define LOOP_TIME_US 4000UL   // 250 Hz ESC/control loop
 #define SERIAL_BAUD 115200  // Match the monitoring portal shown in your screenshot.
@@ -124,6 +133,18 @@
 
 #define TELEMETRY_INTERVAL_MS 500UL  // JSON telemetry interval for monitoring portal.
 #define PID_TUNE_STEP 0.01f          // WMS PID tuning increment/decrement step.
+
+#define BATTERY_SAMPLE_INTERVAL_MS 100UL
+#define BATTERY_CELL_COUNT 4
+#define BATTERY_ADC_REFERENCE_V 5.0f
+#define BATTERY_ADC_MAX_COUNTS 1023.0f
+#define BATTERY_DIVIDER_RATIO 5.0f   // Pack voltage / A0 voltage. Tune for the installed divider.
+#define BATTERY_FILTER_ALPHA 0.15f
+#define BATTERY_MIN_VALID_V 8.0f
+#define BATTERY_MAX_VALID_V 18.5f
+#define BATTERY_DEFAULT_LOW_V 14.0f
+#define BATTERY_DEFAULT_CRITICAL_V 13.2f
+#define BATTERY_DEFAULT_EMERGENCY_V 12.4f
 
 // ================================================================
 // CONFIGURABLE AXIS/MIXER SIGNS
@@ -262,10 +283,12 @@ bool gyro_calibrated = false;
 bool emergencyLockoutActive = false;
 bool rearmNeutralRequired = false;
 bool loopOverrun = false;
+bool batteryFailsafeActive = false;
 
 uint32_t loop_timer = 0;
 uint32_t ledTimer = 0;
 uint32_t telemetryTimer = 0;
+uint32_t batteryTimer = 0;
 uint32_t armStartMs = 0;
 uint32_t disarmStartMs = 0;
 
@@ -278,6 +301,38 @@ int esc_cap = ESC_CAP_BENCH;
 
 // Calibrated receiver values, 1000-2000 us.
 uint16_t ch[6] = {1500, 1500, 1000, 1500, 1000, 1000};
+
+// ================================================================
+// BATTERY MONITOR STATE
+// ================================================================
+
+enum BatteryAlarmLevel {
+  BATTERY_ALARM_OK = 0,
+  BATTERY_ALARM_LOW = 1,
+  BATTERY_ALARM_CRITICAL = 2,
+  BATTERY_ALARM_EMERGENCY = 3
+};
+
+struct BatteryState {
+  float packVoltage;
+  float cellVoltage;
+  uint8_t socPercent;
+  BatteryAlarmLevel alarm;
+  bool valid;
+};
+
+BatteryState battery = {
+  0.0f,
+  0.0f,
+  0,
+  BATTERY_ALARM_OK,
+  false
+};
+
+float batteryLowThreshold = BATTERY_DEFAULT_LOW_V;
+float batteryCriticalThreshold = BATTERY_DEFAULT_CRITICAL_V;
+float batteryEmergencyThreshold = BATTERY_DEFAULT_EMERGENCY_V;
+bool batteryFilterReady = false;
 
 // ================================================================
 // IMU / PID STATE
@@ -1227,6 +1282,132 @@ void updateHeadingHoldFromYawStick(int16_t yawStick) {
 }
 
 // ================================================================
+// BATTERY MONITOR MODULE
+// ================================================================
+
+uint8_t estimateBatterySoc(float cellVoltage) {
+  if (cellVoltage >= 4.20f) return 100;
+  if (cellVoltage <= 3.30f) return 0;
+
+  if (cellVoltage >= 4.00f) {
+    return (uint8_t)(80 + ((cellVoltage - 4.00f) * 20.0f) / 0.20f);
+  }
+
+  if (cellVoltage >= 3.80f) {
+    return (uint8_t)(50 + ((cellVoltage - 3.80f) * 30.0f) / 0.20f);
+  }
+
+  if (cellVoltage >= 3.60f) {
+    return (uint8_t)(20 + ((cellVoltage - 3.60f) * 30.0f) / 0.20f);
+  }
+
+  return (uint8_t)(((cellVoltage - 3.30f) * 20.0f) / 0.30f);
+}
+
+BatteryAlarmLevel classifyBatteryAlarm(float packVoltage) {
+  if (packVoltage <= batteryEmergencyThreshold) return BATTERY_ALARM_EMERGENCY;
+  if (packVoltage <= batteryCriticalThreshold) return BATTERY_ALARM_CRITICAL;
+  if (packVoltage <= batteryLowThreshold) return BATTERY_ALARM_LOW;
+  return BATTERY_ALARM_OK;
+}
+
+void updateBatteryMonitor() {
+  if (!BATTERY_MONITOR_ENABLED) {
+    battery.packVoltage = 0.0f;
+    battery.cellVoltage = 0.0f;
+    battery.socPercent = 0;
+    battery.alarm = BATTERY_ALARM_OK;
+    battery.valid = false;
+    batteryFailsafeActive = false;
+    return;
+  }
+
+  uint32_t now = millis();
+  if (batteryFilterReady && (uint32_t)(now - batteryTimer) < BATTERY_SAMPLE_INTERVAL_MS) {
+    return;
+  }
+
+  batteryTimer = now;
+
+  int raw = analogRead(BATTERY_SENSE_PIN);
+  float adcVoltage = ((float)raw * BATTERY_ADC_REFERENCE_V) / BATTERY_ADC_MAX_COUNTS;
+  float measuredPackVoltage = adcVoltage * BATTERY_DIVIDER_RATIO;
+
+  if (!batteryFilterReady) {
+    battery.packVoltage = measuredPackVoltage;
+    batteryFilterReady = true;
+  } else {
+    battery.packVoltage += BATTERY_FILTER_ALPHA * (measuredPackVoltage - battery.packVoltage);
+  }
+
+  battery.cellVoltage = battery.packVoltage / (float)BATTERY_CELL_COUNT;
+  battery.valid = battery.packVoltage >= BATTERY_MIN_VALID_V && battery.packVoltage <= BATTERY_MAX_VALID_V;
+
+  if (battery.valid) {
+    battery.socPercent = estimateBatterySoc(battery.cellVoltage);
+    battery.alarm = classifyBatteryAlarm(battery.packVoltage);
+  } else {
+    battery.socPercent = 0;
+    battery.alarm = BATTERY_ALARM_EMERGENCY;
+  }
+
+  batteryFailsafeActive = battery.alarm == BATTERY_ALARM_EMERGENCY || !battery.valid;
+}
+
+bool batteryPrearmOk() {
+  if (!BATTERY_MONITOR_ENABLED) return true;
+  return battery.valid && battery.alarm == BATTERY_ALARM_OK;
+}
+
+bool thresholdCommandValuesValid(float low, float critical, float emergency) {
+  return emergency >= 12.0f &&
+         emergency < critical &&
+         critical < low &&
+         low <= 16.8f;
+}
+
+bool readCommandFloat(const char *command, const char *key, float &value) {
+  const char *start = strstr(command, key);
+  if (start == NULL) return false;
+
+  value = (float)atof(start + strlen(key));
+  return true;
+}
+
+void handleBatteryCommand(const char *command) {
+  if (strncmp(command, "BAT:", 4) != 0) return;
+
+  float low = batteryLowThreshold;
+  float critical = batteryCriticalThreshold;
+  float emergency = batteryEmergencyThreshold;
+
+  bool hasLow = readCommandFloat(command, "LOW=", low);
+  bool hasCritical = readCommandFloat(command, "CRIT=", critical);
+  bool hasEmergency = readCommandFloat(command, "EMERG=", emergency);
+
+  if (!hasLow && !hasCritical && !hasEmergency) {
+    Serial.println(F("ERR:BAT_COMMAND_EMPTY"));
+    return;
+  }
+
+  if (!thresholdCommandValuesValid(low, critical, emergency)) {
+    Serial.println(F("ERR:BAT_THRESHOLD_RANGE"));
+    return;
+  }
+
+  batteryLowThreshold = low;
+  batteryCriticalThreshold = critical;
+  batteryEmergencyThreshold = emergency;
+
+  Serial.print(F("ACK:BAT,LOW="));
+  Serial.print(batteryLowThreshold, 2);
+  Serial.print(F(",CRIT="));
+  Serial.print(batteryCriticalThreshold, 2);
+  Serial.print(F(",EMERG="));
+  Serial.println(batteryEmergencyThreshold, 2);
+}
+
+// ================================================================
 // SAFETY / ARMING / MODE LOGIC
 // ================================================================
 
@@ -1266,6 +1447,7 @@ bool safeToArm() {
   if (!sensor_ok) return false;
   if (!gyro_calibrated) return false;
   if (emergencyLockoutActive) return false;
+  if (!batteryPrearmOk()) return false;
   if (rearmNeutralRequired) return false;
   if (!throttleLow()) return false;
 
@@ -1290,9 +1472,15 @@ void check_safety_and_arming() {
     resetPID();
   }
 
+  if (batteryFailsafeActive) {
+    rearmNeutralRequired = true;
+    flight_mode = FLIGHT_DISARMED;
+    resetPID();
+  }
+
   // After CH6 lockout release, require throttle low and yaw centered before arming is allowed.
   // This prevents instant re-arm if the stick is still sitting in the arm corner.
-  if (rearmNeutralRequired && !emergencyLockoutActive && throttleLow() && yawCentered()) {
+  if (rearmNeutralRequired && !emergencyLockoutActive && !batteryFailsafeActive && throttleLow() && yawCentered()) {
     rearmNeutralRequired = false;
   }
 
@@ -1540,7 +1728,7 @@ void updateStatusLED(LedState state) {
 
 LedState getLedState() {
   if (emergencyLockoutActive) return LED_LOCKOUT;
-  if (!receiver_ok || !sensor_ok || !gyro_calibrated || loopOverrun) return LED_ERROR;
+  if (!receiver_ok || !sensor_ok || !gyro_calibrated || batteryFailsafeActive || loopOverrun) return LED_ERROR;
   if (flight_mode == FLIGHT_ARMED) return LED_ARMED;
   if (safeToArm()) return LED_READY;
   return LED_NOT_READY;
@@ -1597,6 +1785,14 @@ void printStateJsonValue() {
     Serial.print(F("SENSOR_FAIL"));
   } else if (!gyro_calibrated) {
     Serial.print(F("GYRO_NOT_CAL"));
+  } else if (BATTERY_MONITOR_ENABLED && !battery.valid) {
+    Serial.print(F("BATTERY_INVALID"));
+  } else if (battery.alarm == BATTERY_ALARM_EMERGENCY) {
+    Serial.print(F("BATTERY_EMERGENCY"));
+  } else if (battery.alarm == BATTERY_ALARM_CRITICAL) {
+    Serial.print(F("BATTERY_CRITICAL"));
+  } else if (battery.alarm == BATTERY_ALARM_LOW) {
+    Serial.print(F("BATTERY_LOW"));
   } else if (rearmNeutralRequired) {
     Serial.print(F("CENTER_YAW"));
   } else if (safeToArm()) {
@@ -1672,6 +1868,12 @@ void printTelemetryJson() {
   Serial.print(F("{\"ms\":"));
   Serial.print(millis());
 
+  Serial.print(F(",\"firmware_version\":\""));
+  Serial.print(FIRMWARE_VERSION);
+  Serial.print(F("\",\"firmware_revision\":\""));
+  Serial.print(FIRMWARE_REVISION);
+  Serial.print(F("\""));
+
   Serial.print(F(",\"state\":\""));
   printStateJsonValue();
   Serial.print(F("\""));
@@ -1681,6 +1883,9 @@ void printTelemetryJson() {
 
   Serial.print(F(",\"lockout\":"));
   Serial.print(emergencyLockoutActive ? 1 : 0);
+
+  Serial.print(F(",\"failsafe\":"));
+  Serial.print((emergencyLockoutActive || batteryFailsafeActive || !receiver_ok || !sensor_ok || !gyro_calibrated) ? 1 : 0);
 
   Serial.print(F(",\"mode\":\""));
   printModeJsonValue();
@@ -1716,6 +1921,25 @@ void printTelemetryJson() {
 
   Serial.print(F(",\"gyroCal\":"));
   Serial.print(gyro_calibrated ? 1 : 0);
+
+  Serial.print(F(",\"battery_monitor_enabled\":"));
+  Serial.print(BATTERY_MONITOR_ENABLED ? 1 : 0);
+  Serial.print(F(",\"battery_voltage\":"));
+  Serial.print(battery.packVoltage, 2);
+  Serial.print(F(",\"battery_cell_voltage\":"));
+  Serial.print(battery.cellVoltage, 2);
+  Serial.print(F(",\"battery_soc\":"));
+  Serial.print(battery.socPercent);
+  Serial.print(F(",\"battery_alarm\":"));
+  Serial.print((int)battery.alarm);
+  Serial.print(F(",\"battery_valid\":"));
+  Serial.print(battery.valid ? 1 : 0);
+  Serial.print(F(",\"battery_low_threshold\":"));
+  Serial.print(batteryLowThreshold, 2);
+  Serial.print(F(",\"battery_critical_threshold\":"));
+  Serial.print(batteryCriticalThreshold, 2);
+  Serial.print(F(",\"battery_emergency_threshold\":"));
+  Serial.print(batteryEmergencyThreshold, 2);
 
   Serial.print(F(",\"compassOK\":"));
   Serial.print(compass_ok ? 1 : 0);
@@ -1906,14 +2130,55 @@ void printGains() {
 */
 void handleSerialTuning() {
   static char pending = 0;
+  static char commandBuffer[72];
+  static byte commandLen = 0;
+  static bool collectingCommand = false;
 
   while (Serial.available() > 0) {
     char c = Serial.read();
 
+    if (collectingCommand) {
+      if (c == '\r') {
+        continue;
+      }
+
+      if (c == '\n') {
+        commandBuffer[commandLen] = '\0';
+        handleBatteryCommand(commandBuffer);
+        commandLen = 0;
+        collectingCommand = false;
+        continue;
+      }
+
+      if (commandLen < sizeof(commandBuffer) - 1) {
+        commandBuffer[commandLen++] = c;
+      } else {
+        commandLen = 0;
+        collectingCommand = false;
+        Serial.println(F("ERR:SERIAL_LINE_TOO_LONG"));
+      }
+
+      continue;
+    }
+
+    if (c == 'B') {
+      commandLen = 0;
+      commandBuffer[commandLen++] = c;
+      collectingCommand = true;
+      pending = 0;
+      continue;
+    }
+
+    if (c == '?') {
+      printGains();
+      pending = 0;
+      continue;
+    }
+
     if (pending == 0) {
       if (c == 'r' || c == 'R' || c == 'y' ||
           c == 'i' || c == 'I' || c == 'u' ||
-          c == 'd' || c == 'D' || c == 'Y' || c == '?') {
+          c == 'd' || c == 'D' || c == 'Y') {
         pending = c;
       }
     } else {
@@ -1933,8 +2198,6 @@ void handleSerialTuning() {
         }
 
         printGains();
-      } else if (pending == '?') {
-        printGains();
       }
 
       pending = 0;
@@ -1949,6 +2212,7 @@ void handleSerialTuning() {
 void setup() {
   pinMode(STATUS_LED_PIN, OUTPUT);
   digitalWrite(STATUS_LED_PIN, LOW);
+  pinMode(BATTERY_SENSE_PIN, INPUT);
 
   configureEscPins();
   forceMotorsOff();
@@ -1956,7 +2220,11 @@ void setup() {
   Serial.begin(SERIAL_BAUD);
   delay(300);
 
-  Serial.println(F("YMFC Flight Controller V6.6C_QMC5883P_COMPASS starting..."));
+  Serial.print(F("YMFC Flight Controller V6.6C_QMC5883P_COMPASS "));
+  Serial.print(FIRMWARE_VERSION);
+  Serial.print(F(" "));
+  Serial.print(FIRMWARE_REVISION);
+  Serial.println(F(" starting..."));
 
   Wire.begin();
   TWBR = 12; // 400 kHz I2C on 16 MHz Arduino Uno.
@@ -1984,6 +2252,7 @@ void setup() {
 
   forceMotorsOff();
   writeEscPulses();
+  updateBatteryMonitor();
 
   telemetryTimer = millis();
   ledTimer = millis();
@@ -1997,6 +2266,7 @@ void loop() {
 
   copyAndCalibrateReceiver();
   updateFlightModeCap();
+  updateBatteryMonitor();
 
   if (sensor_ok && gyro_calibrated) {
     updateAngles();

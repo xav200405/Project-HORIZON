@@ -139,10 +139,11 @@ The flight firmware is written for Arduino Uno constraints: no dynamic
 allocation, fixed control-loop periods via `micros()`, `Wire.h` for I2C,
 `Servo.h` for ESC PWM, and EEPROM-backed calibration data.
 
-Current hardware bring-up defaults:
+Current deployment defaults:
 
-- `BATTERY_MONITOR_ENABLED = false` until the A0 battery-divider hardware is
-  installed and verified.
+- `BATTERY_MONITOR_ENABLED = true` for the verified A0 4S LiPo voltage-divider
+  hardware. Firmware emits pack voltage, cell voltage, SoC, alarm level, and
+  validity in JSON telemetry.
 - `COMPASS_REQUIRED_TO_ARM = false`, so missing compass data falls back to
   yaw-rate command mode instead of silently blocking all arming.
 - The physical CH6 transmitter kill switch is the active bring-up kill path.

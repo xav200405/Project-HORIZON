@@ -13,13 +13,13 @@ Aviation Research Centre.
 
 Current flight controller firmware identity:
 
-- Version: `FC-0.8.0`
-- Revision: `2026-06-17.8`
+- Version: `FC-0.8.1`
+- Revision: `2026-06-19.1`
 
 ## Current hardware bring-up defaults
 
-- `BATTERY_MONITOR_ENABLED = false` in the flight controller because the A0 battery-divider hardware is not installed yet.
-- Battery telemetry remains available, but disabled monitoring reports `BVALID=0`, `BMON=0`, and does not trigger battery failsafe.
+- `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 4S LiPo voltage-divider hardware.
+- Battery telemetry now reports pack voltage, cell voltage, SoC, alarm level, validity, and active thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
 - Flight controller and Calibration Wizard both use the archived PCB receiver map: CH1 roll D7, CH2 pitch D8, CH3 throttle D5, CH4 yaw D4.
@@ -37,7 +37,7 @@ Passing:
 - `tools/self_check.py`
 - Python syntax checks included in `tools/self_check.py`
 - Static validation for motor mixing, control loop timing, PID anti-windup, battery telemetry, dashboard behavior, Calibration Wizard v4 behavior, and HW-127/QMC5883P compass naming/register constants, archived init sequence, and zero-read diagnostics
-- Static validation for battery-monitor disabled bring-up behavior, gated battery failsafe, configurable compass arming, and serial arm-denied diagnostics
+- Static validation for active battery monitoring, gated battery failsafe, configurable compass arming, and serial arm-denied diagnostics
 - Static validation for archived RC pin mapping and throttle capture from D5
 - Static validation for D13 status LED behavior in flight and calibration sketches
 - Static validation for archived-style arming/disarming thresholds, `150 ms` holds, and re-arm neutral latch

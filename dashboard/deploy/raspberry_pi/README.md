@@ -32,6 +32,19 @@ sudo bash update.sh
 The update script preserves `/etc/tparc-rms/tparc-rms.env` and
 `/var/lib/tparc-rms`.
 
+## Firmware Upload
+
+Admins can open the RMS Firmware page to upload `.ino` sketches or zipped
+Arduino sketch folders to the flight controller through the Raspberry Pi's USB
+serial connection. The installer tries to install `arduino-cli`, `avrdude`,
+and the common `arduino:avr` core for Uno/Nano/Mega targets. If your Pi OS
+image does not provide `arduino-cli` through apt, install it separately and set
+`TPARC_ARDUINO_CLI` in `/etc/tparc-rms/tparc-rms.env`.
+
+During firmware upload, the RMS pauses its telemetry serial reader, runs
+`arduino-cli compile`, runs `arduino-cli upload`, then restarts telemetry.
+Every attempt is recorded in the audit log.
+
 For GitHub-based updates, create a GitHub release in
 `xav200405/Project-HORIZON` with the package tarball as an asset. If no
 matching release asset exists, the updater falls back to scanning under

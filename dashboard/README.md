@@ -48,6 +48,11 @@ The installer creates a `tparc-rms.service` systemd service, starts it on boot,
 keeps configuration in `/etc/tparc-rms/tparc-rms.env`, and stores data in
 `/var/lib/tparc-rms`.
 
+Admins can use the Firmware page to compile and upload Arduino sketches to the
+flight controller through the Raspberry Pi USB serial link. The Pi package
+attempts to install `arduino-cli`, `avrdude`, and the common `arduino:avr`
+core.
+
 To update an installed Pi with a newer package:
 
 ```bash

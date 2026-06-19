@@ -479,6 +479,53 @@ body[data-view="network"] .ops-only, body[data-view="network"] .telemetry-only {
 .settings-card { align-self: start; }
 .settings-users { grid-column: span 1; }
 .settings-audit { grid-column: 1 / -1; }
+.firmware-grid {
+  padding: 78px 16px 32px;
+  display: grid;
+  grid-template-columns: minmax(300px, .9fr) minmax(300px, 1.1fr);
+  gap: 12px;
+}
+.firmware-hero, .firmware-log-panel { grid-column: 1 / -1; }
+.firmware-card { align-self: start; }
+.firmware-kv { margin-bottom: 12px; }
+.checkbox-row {
+  display: flex !important;
+  grid-template-columns: none !important;
+  gap: 8px !important;
+  align-items: center;
+  color: var(--ink) !important;
+}
+.checkbox-row input { width: auto; }
+.summary-alert { border-color: rgba(180, 35, 24, .5) !important; }
+.firmware-port-list {
+  display: grid;
+  gap: 8px;
+  max-height: 220px;
+  overflow: auto;
+}
+.firmware-port {
+  display: grid;
+  gap: 3px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 8px;
+  background: var(--panel-soft);
+}
+.firmware-port b, .firmware-port small { font-family: Consolas, monospace; }
+.firmware-port span, .firmware-port small { color: var(--muted); overflow-wrap: anywhere; }
+#firmwareLog {
+  min-height: 320px;
+  max-height: 520px;
+  overflow: auto;
+  margin: 0;
+  padding: 12px;
+  border-radius: 6px;
+  background: #0f1724;
+  color: #d7e3f4;
+  font-family: Consolas, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+}
 .settings-form { display: grid; gap: 10px; }
 .settings-form label { display: grid; gap: 4px; color: var(--muted); font-weight: 600; }
 .settings-form input, .settings-form select {
@@ -512,6 +559,8 @@ dialog::backdrop { background: rgba(15, 23, 36, .56); }
   .dashboard-grid { grid-template-columns: 1fr 1fr; }
   .graph-panel, .side-panel, .controls-panel, .analysis-panel, .fields-panel, .ops-console, .live-table-panel, .network-console { grid-column: span 2; }
   .settings-grid { grid-template-columns: 1fr 1fr; }
+  .firmware-grid { grid-template-columns: 1fr; }
+  .firmware-hero, .firmware-log-panel { grid-column: span 1; }
   .settings-hero, .settings-audit { grid-column: span 2; }
   .ops-console { grid-template-columns: 1fr; }
   .network-console { grid-template-columns: 1fr; }
@@ -527,6 +576,7 @@ dialog::backdrop { background: rgba(15, 23, 36, .56); }
 @media (max-width: 560px) {
   .dashboard-grid { grid-template-columns: 1fr; }
   .settings-grid { grid-template-columns: 1fr; padding-top: 92px; }
+  .firmware-grid { padding-top: 118px; }
   .settings-hero, .settings-audit, .settings-users { grid-column: span 1; }
   .settings-hero { display: grid; }
   .settings-summary { width: 100%; }

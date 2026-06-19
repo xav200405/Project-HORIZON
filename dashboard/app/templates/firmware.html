@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TP-ARC firmware</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+  <link rel="icon" href="{{ url_for('static', filename='img/project-horizon-logo.png') }}">
+</head>
+<body data-csrf="{{ csrf }}">
+  <header class="topbar">
+    <div class="brand">
+      <img class="brand-logo" src="{{ url_for('static', filename='img/project-horizon-logo.png') }}" alt="Project HORIZON">
+      <strong>TP-ARC firmware</strong>
+    </div>
+    <div class="topbar-right">
+      <nav class="top-nav">
+        <a class="text-button" href="{{ url_for('main.dashboard') }}">Operations</a>
+        <a class="text-button" href="{{ url_for('main.telemetry_page') }}">Telemetry</a>
+        <a class="text-button" href="{{ url_for('main.network_page') }}">Network</a>
+        <a class="text-button active-nav" href="{{ url_for('main.firmware_page') }}">Firmware</a>
+        <a class="text-button" href="{{ url_for('main.settings') }}">Settings</a>
+      </nav>
+      <span class="badge role">{{ user.role }}</span>
+      <form method="post" action="{{ url_for('auth.logout') }}">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <button class="text-button" type="submit" data-csrf-form>Logout</button>
+      </form>
+    </div>
+  </header>
+
+  <main class="firmware-grid">
+    <section class="settings-hero firmware-hero">
+      <div>
+        <p class="eyebrow">Flight controller maintenance</p>
+        <h1>Arduino firmware upload</h1>
+      </div>
+      <div class="settings-summary">
+        <span><b id="firmwareCliState">-</b><small>CLI</small></span>
+        <span><b id="firmwarePortCount">0</b><small>Ports</small></span>
+      </div>
+    </section>
+
+    <section class="panel firmware-card">
+      <h2>Upload sketch</h2>
+      <form id="firmwareForm" class="settings-form" enctype="multipart/form-data">
+        <input type="hidden" name="csrf" value="{{ csrf }}">
+        <label>Sketch file
+          <input id="sketchFile" name="sketch" type="file" accept=".ino,.zip" required>
+        </label>
+        <label>Serial port
+          <select id="firmwarePort" name="port" required></select>
+        </label>
+        <label>Board
+          <select id="firmwareBoard" name="fqbn" required></select>
+        </label>
+        <label>Custom FQBN
+          <input id="firmwareCustomBoard" placeholder="Optional, for example arduino:avr:uno">
+        </label>
+        <label class="checkbox-row">
+          <input id="compileOnly" name="compile_only" type="checkbox" value="1">
+          Compile only
+        </label>
+        <button id="firmwareUploadButton" type="submit">Compile and upload</button>
+      </form>
+    </section>
+
+    <section class="panel firmware-card">
+      <h2>Target status</h2>
+      <dl class="kv firmware-kv">
+        <dt>Arduino CLI</dt><dd id="firmwareCliVersion">-</dd>
+        <dt>CLI path</dt><dd id="firmwareCliPath">-</dd>
+        <dt>Max upload</dt><dd id="firmwareMaxUpload">-</dd>
+        <dt>Selected port</dt><dd id="firmwareSelectedPort">-</dd>
+        <dt>Selected board</dt><dd id="firmwareSelectedBoard">-</dd>
+      </dl>
+      <div class="button-row">
+        <button id="refreshFirmwareStatus" type="button">Refresh</button>
+      </div>
+      <div id="firmwarePorts" class="firmware-port-list"></div>
+    </section>
+
+    <section class="panel firmware-log-panel">
+      <div class="live-table-header">
+        <h2>Upload log</h2>
+        <span id="firmwareResultBadge" class="badge role">Idle</span>
+      </div>
+      <pre id="firmwareLog">Waiting for a sketch upload.</pre>
+    </section>
+  </main>
+
+  <script src="{{ url_for('static', filename='js/firmware.js') }}"></script>
+</body>
+</html>

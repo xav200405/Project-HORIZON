@@ -7,6 +7,7 @@ from flask import Blueprint, Response, current_app, redirect, render_template, r
 
 from . import serial_worker
 from .auth import csrf_required, current_user, login_required, role_required
+from .firmware import firmware_status, upload_firmware
 from .storage import audit, db, export_csv, export_json, known_telemetry_fields, store_telemetry, telemetry_payloads, telemetry_summary
 
 main_bp = Blueprint("main", __name__)
@@ -62,6 +63,13 @@ def settings():
     return render_template("settings.html", user=current_user(), csrf=session["csrf"], users=users, logs=logs)
 
 
+@main_bp.route("/firmware")
+@login_required
+@role_required("admin")
+def firmware_page():
+    return render_template("firmware.html", user=current_user(), csrf=session["csrf"])
+
+
 @main_bp.route("/api/state")
 @login_required
 def state():
@@ -72,6 +80,39 @@ def state():
 @login_required
 def network_state():
     return serial_worker.network_state()
+
+
+@main_bp.route("/api/firmware/status")
+@login_required
+@role_required("admin")
+def firmware_status_route():
+    return firmware_status(current_app.config)
+
+
+@main_bp.route("/api/firmware/upload", methods=["POST"])
+@login_required
+@csrf_required
+@role_required("admin")
+def firmware_upload_route():
+    port = request.form.get("port", "").strip()
+    fqbn = request.form.get("fqbn", "").strip()
+    compile_only = request.form.get("compile_only") == "1"
+    upload = request.files.get("sketch")
+    audit_details = {"port": port, "fqbn": fqbn, "compile_only": compile_only}
+    serial_worker.stop()
+    try:
+        result = upload_firmware(current_app.config, upload, port, fqbn, compile_only)
+    except Exception as exc:
+        audit_details["error"] = str(exc)
+        audit(current_app.config["DATABASE"], session["username"], "FIRMWARE_UPLOAD_FAILED", audit_details, request.remote_addr)
+        return {"ok": False, "error": str(exc)}, 400
+    finally:
+        serial_worker.start()
+    audit_details["ok"] = result["ok"]
+    audit_details["sketch"] = result["sketch"]
+    audit(current_app.config["DATABASE"], session["username"], "FIRMWARE_UPLOAD", audit_details, request.remote_addr)
+    status_code = 200 if result["ok"] else 400
+    return result, status_code
 
 
 def _time_window_args():

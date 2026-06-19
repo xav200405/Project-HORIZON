@@ -20,6 +20,7 @@
         <a class="text-button {% if view == 'ops' %}active-nav{% endif %}" href="{{ url_for('main.dashboard') }}">Operations</a>
         <a class="text-button {% if view == 'telemetry' %}active-nav{% endif %}" href="{{ url_for('main.telemetry_page') }}">Telemetry</a>
         <a class="text-button {% if view == 'network' %}active-nav{% endif %}" href="{{ url_for('main.network_page') }}">Network</a>
+        {% if user.role == 'admin' %}<a class="text-button" href="{{ url_for('main.firmware_page') }}">Firmware</a>{% endif %}
       </nav>
       <span id="latency">-- ms</span>
       <span id="timer">00:00</span>
@@ -314,7 +315,7 @@
   </main>
 
   <footer class="footer">
-    <span>TP-ARC v1.0</span>
+    <span>TP-ARC 2026.06-rev01.6</span>
     <span>TLS <b id="tlsStatus">active</b></span>
     <span>Role {{ user.role }}</span>
     <span id="sessionCountdown">30:00</span>

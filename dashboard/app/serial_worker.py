@@ -31,8 +31,15 @@ class SerialWorker:
     def start(self):
         if self.thread and self.thread.is_alive():
             return
+        self.stop_event.clear()
         self.thread = threading.Thread(target=self._run, name="serial-reader", daemon=True)
         self.thread.start()
+
+    def stop(self, timeout=3.0):
+        self.stop_event.set()
+        if self.thread and self.thread.is_alive():
+            self.thread.join(timeout=timeout)
+        self.thread = None
 
     def send(self, command):
         if not command.endswith("\n"):
@@ -58,26 +65,33 @@ class SerialWorker:
             self.serial_status = "simulated"
             audit(self.db_path, "system", "SERIAL_OPEN_FAILED", {"error": str(exc), "port": self.port})
 
-        while not self.stop_event.is_set():
-            if ser is None:
-                self._emit_simulated()
-                time.sleep(0.1)
-                continue
+        try:
+            while not self.stop_event.is_set():
+                if ser is None:
+                    self._emit_simulated()
+                    time.sleep(0.1)
+                    continue
 
-            try:
-                while not self.command_queue.empty():
-                    ser.write(self.command_queue.get_nowait().encode("ascii"))
-                line = ser.readline().decode("ascii", errors="replace").strip()
-                if line:
-                    self._handle_line(line)
-                elif time.time() - self.last_serial_ts > 1.0:
-                    self.serial_status = "lost"
+                try:
+                    while not self.command_queue.empty():
+                        ser.write(self.command_queue.get_nowait().encode("ascii"))
+                    line = ser.readline().decode("ascii", errors="replace").strip()
+                    if line:
+                        self._handle_line(line)
+                    elif time.time() - self.last_serial_ts > 1.0:
+                        self.serial_status = "lost"
+                        self.socketio.emit("link_status", {"serial": "lost"})
+                except Exception as exc:
+                    self.serial_status = "error"
+                    audit(self.db_path, "system", "SERIAL_ERROR", {"error": str(exc)})
                     self.socketio.emit("link_status", {"serial": "lost"})
-            except Exception as exc:
-                self.serial_status = "error"
-                audit(self.db_path, "system", "SERIAL_ERROR", {"error": str(exc)})
-                self.socketio.emit("link_status", {"serial": "lost"})
-                time.sleep(1)
+                    time.sleep(1)
+        finally:
+            if ser is not None:
+                try:
+                    ser.close()
+                except Exception:
+                    pass
 
     def _handle_line(self, line):
         parsed = parse_telemetry_line(line)

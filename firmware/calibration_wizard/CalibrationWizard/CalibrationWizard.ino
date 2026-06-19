@@ -19,7 +19,7 @@
  *  - Captures axis direction/inversion information.
  *  - Implements real MPU6050 gyro offset calibration.
  *  - Implements BMP280 raw pressure baseline capture.
- *  - Implements HMC5883L-style stationary compass baseline/offset sampling.
+ *  - Implements QMC5883P stationary compass baseline/offset sampling.
  *  - v6.3 changes endpoint capture order to CH5, CH6, then CH1-CH4.
  *  - v6.3 removes the C key prompt from endpoint/switch range capture and uses timed auto capture.
  *  - v6.4 changes compass calibration to simple flat 360-degree heading calibration.
@@ -31,7 +31,8 @@
  *  It only checks that the compass is alive and reasonably stable while the drone is kept still.
  *  The saved compass baseline is an offset reference: future code should subtract it from live raw readings
  *  if it wants a zero-centered magnetic disturbance/stability check.
- *  The compass code below still uses the HMC5883L register layout at COMPASS_ADDR = 0x2C.
+ *  The compass code below uses the QMC5883P register layout at COMPASS_ADDR = 0x2C.
+ *  QMC5883P chip ID is register 0x00 and raw X/Y/Z data is registers 0x01..0x06.
  */
 
 #include <Wire.h>
@@ -46,7 +47,8 @@
 
 #define MPU6050_ADDR      0x68
 #define BMP280_ADDR       0x76
-#define COMPASS_ADDR      0x2C     // Project fixed address. HMC5883L standard modules are often 0x1E.
+#define COMPASS_ADDR      0x2C     // Project fixed address for HW-127/QMC5883P compass modules.
+#define QMC5883P_CHIP_ID  0x80
 
 #define EEPROM_START_ADDR 0
 #define EEPROM_VERSION    65
@@ -667,25 +669,42 @@ bool calibrateGyro() {
 bool initCompass() {
   if (!i2cDevicePresent(COMPASS_ADDR)) return false;
 
-  // HMC5883L-style setup:
-  // Config A: 8-average, 15Hz, normal measurement.
-  // Config B: gain.
-  // Mode    : continuous measurement.
-  if (!writeReg(COMPASS_ADDR, 0x00, 0x70)) return false;
-  if (!writeReg(COMPASS_ADDR, 0x01, 0x20)) return false;
-  if (!writeReg(COMPASS_ADDR, 0x02, 0x00)) return false;
+  uint8_t chipId = 0;
+  if (!readRegs(COMPASS_ADDR, 0x00, 1, &chipId)) return false;
+
+  Serial.print(F("QMC5883P compass chip ID: 0x"));
+  if (chipId < 16) Serial.print('0');
+  Serial.println(chipId, HEX);
+
+  if (chipId != QMC5883P_CHIP_ID) {
+    Serial.println(F("Unexpected compass chip ID. Expected QMC5883P ID 0x80 at register 0x00."));
+    return false;
+  }
+
+  // QMC5883P setup. Data registers are 0x01..0x06; 0x00 is chip ID.
+  if (!writeReg(COMPASS_ADDR, 0x0D, 0x40)) return false;
+  if (!writeReg(COMPASS_ADDR, 0x29, 0x06)) return false;
+  if (!writeReg(COMPASS_ADDR, 0x0A, 0xCF)) return false;
+  if (!writeReg(COMPASS_ADDR, 0x0B, 0x00)) return false;
   delay(100);
   return true;
 }
 
 bool readCompassRaw(int16_t &mx, int16_t &my, int16_t &mz) {
   uint8_t b[6];
-  if (!readRegs(COMPASS_ADDR, 0x03, 6, b)) return false;
+  if (!readRegs(COMPASS_ADDR, 0x01, 6, b)) return false;
 
-  // HMC5883L output order: X, Z, Y.
-  mx = makeI16(b[0], b[1]);
-  mz = makeI16(b[2], b[3]);
-  my = makeI16(b[4], b[5]);
+  // QMC5883P output order is X, Y, Z and each axis is little-endian.
+  mx = makeI16(b[1], b[0]);
+  my = makeI16(b[3], b[2]);
+  mz = makeI16(b[5], b[4]);
+  return true;
+}
+
+bool compassRawLooksUsable(int16_t mx, int16_t my, int16_t mz) {
+  if (mx == 0 && my == 0 && mz == 0) return false;
+  if (mx == 32767 || my == 32767 || mz == 32767) return false;
+  if (mx == -32768 || my == -32768 || mz == -32768) return false;
   return true;
 }
 
@@ -716,6 +735,15 @@ bool captureCompassBaseline() {
   for (int i = 0; i < SENSOR_BASELINE_SAMPLES; i++) {
     if (!readCompassRaw(mx, my, mz)) {
       Serial.println(F("Compass read failed."));
+      return false;
+    }
+
+    if (!compassRawLooksUsable(mx, my, mz)) {
+      Serial.print(F("Compass returned unusable raw data X/Y/Z = "));
+      Serial.print(mx); Serial.print(F(" / "));
+      Serial.print(my); Serial.print(F(" / "));
+      Serial.println(mz);
+      Serial.println(F("Check the QMC5883P module, wiring, and address before saving calibration."));
       return false;
     }
 

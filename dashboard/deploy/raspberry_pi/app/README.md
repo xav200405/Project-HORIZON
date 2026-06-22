@@ -106,15 +106,14 @@ which defaults to `dashboard`. Future folders such as
 If the repository changes later, edit `TPARC_UPDATE_REPO` in
 `/etc/tparc-rms/tparc-rms.env`.
 
-Default bootstrap users:
+Default bootstrap user:
 
 | Username | Password | Role |
 | --- | --- | --- |
 | `tparc` | `tparc0322` | `admin` |
-| `operator` | `change-me-operator` | `operator` |
-| `viewer` | `change-me-viewer` | `viewer` |
 
-Change these from Settings before field or shared-network use.
+Change this from Settings before field or shared-network use. Add operator or
+viewer accounts later from Settings if required.
 
 ## Configure
 

@@ -264,8 +264,8 @@ class TelemetryChart {
     });
   }
 
-  toBase64Image() {
-    return this.canvas.toDataURL("image/png");
+  toBase64Image(type = "image/png", quality) {
+    return this.canvas.toDataURL(type, quality);
   }
 }
 
@@ -285,11 +285,113 @@ function fmt(value, digits = 2) {
   if (value === undefined || value === null || value === "") return "-";
   return String(value);
 }
+function exportTimestamp() {
+  return new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14);
+}
+function downloadBlob(blob, filename) {
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  URL.revokeObjectURL(a.href);
+  a.remove();
+}
+function dataUrlBytes(dataUrl) {
+  const encoded = dataUrl.split(",", 2)[1] || "";
+  const binary = atob(encoded);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return bytes;
+}
+function asciiBytes(text) {
+  const bytes = new Uint8Array(text.length);
+  for (let i = 0; i < text.length; i += 1) bytes[i] = text.charCodeAt(i) & 255;
+  return bytes;
+}
+function concatBytes(parts) {
+  const total = parts.reduce((sum, part) => sum + part.length, 0);
+  const out = new Uint8Array(total);
+  let offset = 0;
+  parts.forEach(part => {
+    out.set(part, offset);
+    offset += part.length;
+  });
+  return out;
+}
+function pdfText(text) {
+  return String(text ?? "").replace(/[\\()]/g, "\\$&").replace(/[\r\n]+/g, " ");
+}
+function pdfOffset(value) {
+  return String(value).padStart(10, "0");
+}
+function buildChartPdfBlob() {
+  chart.update();
+  const imageBytes = dataUrlBytes(chart.toBase64Image("image/jpeg", 0.92));
+  const pageW = 842;
+  const pageH = 595;
+  const margin = 36;
+  const title = `TP-ARC Telemetry Graph - ${activeTab}`;
+  const visibleSeries = (tabs[activeTab] || [])
+    .filter(([key]) => enabledSeries.has(key))
+    .map(([, label]) => label);
+  const subtitle = `${visibleSeries.join(", ") || "No series selected"} | ${qs("chartStatus")?.textContent || "Current view"}`;
+  const imageW = pageW - margin * 2;
+  const imageH = Math.min(450, imageW * chart.canvas.height / Math.max(1, chart.canvas.width));
+  const imageX = margin;
+  const imageY = 58;
+  const content = [
+    "BT /F1 18 Tf 36 560 Td (", pdfText(title), ") Tj ET\n",
+    "BT /F1 10 Tf 36 542 Td (", pdfText(subtitle), ") Tj ET\n",
+    "BT /F1 9 Tf 36 526 Td (Generated ", pdfText(new Date().toLocaleString()), ") Tj ET\n",
+    "q ", fixed(imageW, 2), " 0 0 ", fixed(imageH, 2), " ", fixed(imageX, 2), " ", fixed(imageY, 2), " cm /Im0 Do Q\n",
+  ].join("");
+  const objects = [
+    [asciiBytes("<< /Type /Catalog /Pages 2 0 R >>")],
+    [asciiBytes("<< /Type /Pages /Kids [3 0 R] /Count 1 >>")],
+    [asciiBytes("<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 4 0 R >> /XObject << /Im0 5 0 R >> >> /Contents 6 0 R >>")],
+    [asciiBytes("<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")],
+    [
+      asciiBytes(`<< /Type /XObject /Subtype /Image /Width ${chart.canvas.width} /Height ${chart.canvas.height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imageBytes.length} >>\nstream\n`),
+      imageBytes,
+      asciiBytes("\nendstream"),
+    ],
+    [asciiBytes(`<< /Length ${content.length} >>\nstream\n${content}endstream`)],
+  ];
+  const chunks = [asciiBytes("%PDF-1.4\n")];
+  const offsets = [0];
+  let position = chunks[0].length;
+  objects.forEach((parts, index) => {
+    offsets[index + 1] = position;
+    const prefix = asciiBytes(`${index + 1} 0 obj\n`);
+    const suffix = asciiBytes("\nendobj\n");
+    chunks.push(prefix, ...parts, suffix);
+    position += prefix.length + parts.reduce((sum, part) => sum + part.length, 0) + suffix.length;
+  });
+  const xrefStart = position;
+  const xref = [
+    "xref\n0 7\n",
+    "0000000000 65535 f \n",
+    ...offsets.slice(1).map(offset => `${pdfOffset(offset)} 00000 n \n`),
+    "trailer\n<< /Size 7 /Root 1 0 R >>\nstartxref\n",
+    String(xrefStart),
+    "\n%%EOF\n",
+  ].join("");
+  chunks.push(asciiBytes(xref));
+  return new Blob([concatBytes(chunks)], { type: "application/pdf" });
+}
+function exportChartImage() {
+  const blob = dataUrlBytes(chart.toBase64Image());
+  downloadBlob(new Blob([blob], { type: "image/png" }), `tparc_chart_${exportTimestamp()}.png`);
+}
+function exportChartPdf() {
+  downloadBlob(buildChartPdfBlob(), `tparc_chart_${exportTimestamp()}.pdf`);
+}
 function latestSampleRate() {
   if (history.length < 2) return 0;
   const first = history[Math.max(0, history.length - 20)];
   const last = history[history.length - 1];
-  const dt = last.timestamp - first.timestamp;
+  const dt = chartTimestamp(last) - chartTimestamp(first);
   return dt > 0 ? (history.length - Math.max(0, history.length - 20) - 1) / dt : 0;
 }
 function clamp(value, min, max) { return Math.max(min, Math.min(max, value)); }
@@ -313,6 +415,20 @@ function formatAxisValue(value) {
 function numericValue(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
+}
+function chartTimestamp(row) {
+  const received = Number(row?.received_at);
+  if (Number.isFinite(received)) return received;
+  const timestamp = Number(row?.timestamp);
+  return Number.isFinite(timestamp) ? timestamp : Date.now() / 1000;
+}
+function normalizeTelemetryPacket(data) {
+  const receivedAt = Date.now() / 1000;
+  const packet = { ...(data || {}) };
+  const timestamp = Number(packet.timestamp);
+  packet.timestamp = Number.isFinite(timestamp) ? timestamp : receivedAt;
+  packet.received_at = receivedAt;
+  return packet;
 }
 function formatFieldName(key) {
   if (fieldLabels[key]) return fieldLabels[key];
@@ -386,13 +502,13 @@ function renderTabs() {
 function updateChart() {
   const now = Date.now() / 1000;
   const minTime = windowSeconds === "full" ? 0 : now - windowSeconds;
-  const points = history.filter(p => Number(p.timestamp) >= minTime);
+  const points = history.filter(p => chartTimestamp(p) >= minTime);
   const selectedSeries = tabs[activeTab].filter(([key]) => enabledSeries.has(key));
   chart.data.datasets = selectedSeries
     .filter(([key]) => enabledSeries.has(key))
     .map(([key, label], index) => ({
       label,
-      data: downsample(points.map(p => ({ x: Number(p.timestamp), y: numericValue(p[key]) }))),
+      data: downsample(points.map(p => ({ x: chartTimestamp(p), y: numericValue(p[key]) }))),
       borderColor: ["#1f6feb", "#138a4b", "#bd1e1e", "#b56b00"][index % 4],
       pointRadius: 0,
       borderWidth: 2,
@@ -504,7 +620,8 @@ function positionDot(id, x, y) {
 }
 
 function updateTelemetry(data) {
-  if (!data || !Number.isFinite(Number(data.timestamp))) return;
+  if (!data) return;
+  data = normalizeTelemetryPacket(data);
   lastStateTimestamp = Math.max(lastStateTimestamp, Number(data.timestamp));
   telemetryPacketCount += 1;
   const nowPacket = Date.now() / 1000;
@@ -814,12 +931,8 @@ function setupControls() {
   qs("csvExport").onclick = () => window.location = "/api/export/csv";
   qs("jsonExport").onclick = () => window.location = "/api/export/json";
   qs("pdfExport").onclick = () => window.location = "/api/export/pdf";
-  qs("pngExport").onclick = () => {
-    const a = document.createElement("a");
-    a.href = chart.toBase64Image();
-    a.download = `tparc_chart_${new Date().toISOString().replace(/[-:T]/g, "").slice(0, 14)}.png`;
-    a.click();
-  };
+  qs("chartPdfExport").onclick = exportChartPdf;
+  qs("pngExport").onclick = exportChartImage;
   qs("copyRaw").onclick = () => navigator.clipboard.writeText(qs("rawData").textContent);
   qs("markEvent").onclick = async () => {
     if (role === "viewer") return;

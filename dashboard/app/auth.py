@@ -11,10 +11,10 @@ auth_bp = Blueprint("auth", __name__)
 
 
 def init_auth(db_path):
-    defaults = [
-        ("tparc", "tparc0322", "admin"),
-        ("operator", "change-me-operator", "operator"),
-        ("viewer", "change-me-viewer", "viewer"),
+    defaults = [("tparc", "tparc0322", "admin")]
+    retired_defaults = [
+        ("operator", "change-me-operator"),
+        ("viewer", "change-me-viewer"),
     ]
     with db(db_path) as conn:
         for username, password, role in defaults:
@@ -24,6 +24,10 @@ def init_auth(db_path):
                     "INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)",
                     (username, bcrypt.hashpw(password.encode(), bcrypt.gensalt()), role, time.time()),
                 )
+        for username, password in retired_defaults:
+            row = conn.execute("SELECT password_hash FROM users WHERE username=?", (username,)).fetchone()
+            if row and bcrypt.checkpw(password.encode(), row["password_hash"]):
+                conn.execute("DELETE FROM users WHERE username=?", (username,))
 
 
 def current_user():

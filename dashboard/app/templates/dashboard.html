@@ -64,13 +64,19 @@
       <canvas id="telemetryChart"></canvas>
       <div class="graph-toolbar">
         <div class="series" id="seriesToggles"></div>
-        <div class="time-windows">
-          <button data-window="10">10s</button>
-          <button data-window="60">1m</button>
-          <button data-window="300">5m</button>
-          <button data-window="1800">30m</button>
-          <button data-window="full">Full</button>
-          <button id="jumpLive" class="hidden">Jump to live</button>
+        <div class="graph-actions">
+          <div class="time-windows">
+            <button data-window="10">10s</button>
+            <button data-window="60">1m</button>
+            <button data-window="300">5m</button>
+            <button data-window="1800">30m</button>
+            <button data-window="full">Full</button>
+            <button id="jumpLive" class="hidden">Jump to live</button>
+          </div>
+          <div class="graph-exports">
+            <button id="chartPdfExport">PDF</button>
+            <button id="pngExport">Image</button>
+          </div>
         </div>
       </div>
     </section>
@@ -268,8 +274,7 @@
       <div class="exports">
         <button id="csvExport">CSV</button>
         <button id="jsonExport">JSON</button>
-        <button id="pdfExport">PDF</button>
-        <button id="pngExport">PNG</button>
+        <button id="pdfExport">Report PDF</button>
       </div>
       <div class="raw-box">
         <div class="raw-header"><strong>Raw Data</strong><button id="copyRaw">Copy</button></div>
@@ -279,7 +284,7 @@
   </main>
 
   <footer class="footer">
-    <span>TP-ARC 2026.06-rev01.13</span>
+    <span>TP-ARC 2026.06-rev01.15</span>
     <span>TLS <b id="tlsStatus">active</b></span>
     <span>Role {{ user.role }}</span>
     <span id="sessionCountdown">30:00</span>

@@ -204,7 +204,7 @@ body[data-view="network"] .data-view { display: none !important; }
   border: 1px solid var(--line);
   border-radius: 6px;
 }
-.tabs, .series, .time-windows, .button-row, .exports { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.tabs, .series, .time-windows, .button-row, .exports, .graph-exports { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
 .graph-toolbar {
   display: flex;
   align-items: flex-start;
@@ -212,10 +212,18 @@ body[data-view="network"] .data-view { display: none !important; }
   gap: 12px;
 }
 .graph-toolbar .series,
-.graph-toolbar .time-windows {
+.graph-toolbar .time-windows,
+.graph-toolbar .graph-exports {
   margin-bottom: 0;
 }
-.tabs button, .series button, .time-windows button {
+.graph-actions {
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.tabs button, .series button, .time-windows button, .graph-exports button {
   min-height: 32px;
   padding: 6px 10px;
 }

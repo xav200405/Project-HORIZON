@@ -16,7 +16,7 @@ For a full start-to-finish walkthrough, read
 - Live Telemetry page with charts, controls, raw values, and every current telemetry field.
 - Network page showing serial link health, packet rate, browser/socket status, packet age, and raw serial lines.
 - Telemetry recording to SQLite.
-- CSV, JSON, PDF, and chart PNG export.
+- CSV and JSON data export, report PDF export, and current graph PDF/image export.
 - Login, roles, CSRF protection, audit log, and session timeout.
 - Optional serial commands for PID updates, battery thresholds, calibration trigger, and RMS kill when deliberately commissioned.
 
@@ -152,13 +152,12 @@ http://127.0.0.1:5000/login
 
 ## Default Login
 
-Default users are created on first run:
+One default admin user is created on first run:
 
 - `tparc` / `tparc0322`
-- `operator` / `change-me-operator`
-- `viewer` / `change-me-viewer`
 
-Change these before field use or network use.
+Change this before field use or network use. Add operator or viewer accounts
+from Settings only when needed.
 
 Roles:
 

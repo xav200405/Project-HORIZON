@@ -18,8 +18,9 @@ Current flight controller firmware identity:
 
 Current RMS package identity:
 
-- Package: `2026.06-rev01.13`
+- Package: `2026.06-rev01.15`
 - Current release folder: `dashboard/v1.5.1/`
+- Retired v1.5 and superseded v1.5.1 package builds are stored under `_archive/`.
 
 ## Current hardware bring-up defaults
 

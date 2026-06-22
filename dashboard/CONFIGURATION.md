@@ -188,13 +188,11 @@ If each UAV has its own Raspberry Pi, they can all use port `5000` because each 
 
 ## User Accounts
 
-Fresh databases create:
+Fresh databases create one bootstrap admin account:
 
 | Username | Password | Role |
 | --- | --- | --- |
 | `tparc` | `tparc0322` | `admin` |
-| `operator` | `change-me-operator` | `operator` |
-| `viewer` | `change-me-viewer` | `viewer` |
 
 Use `/settings` to:
 

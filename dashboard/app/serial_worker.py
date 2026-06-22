@@ -105,7 +105,12 @@ class SerialWorker:
             self.serial_status = "connected"
         self.raw_lines = (self.raw_lines + [line])[-20:]
         parsed["raw_lines"] = list(self.raw_lines)
-        if "roll" in parsed:
+        telemetry_fields = {
+            "roll", "pitch", "yaw", "heading", "controller_ms", "state", "mode",
+            "armed", "m1", "m2", "m3", "m4", "battery_soc", "battery_voltage",
+            "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate",
+        }
+        if telemetry_fields.intersection(parsed):
             self.latest_state.update(parsed)
             store_telemetry(self.db_path, self.latest_state)
             self.socketio.emit("telemetry", self.latest_state)

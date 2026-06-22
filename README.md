@@ -108,16 +108,15 @@ changes. The packaged config already sets
 `TPARC_UPDATE_SOURCE_PATH=dashboard`, so an installed Pi can update itself with
 `sudo bash /opt/tparc-rms/update.sh`.
 
-Default bootstrap users are created on first run:
+One bootstrap admin user is created on first run:
 
 | Username | Password | Role |
 | --- | --- | --- |
 | `tparc` | `tparc0322` | `admin` |
-| `operator` | `change-me-operator` | `operator` |
-| `viewer` | `change-me-viewer` | `viewer` |
 
-Change these credentials from the RMS Settings page before field use. Do not
-expose the RMS to untrusted networks while default credentials are active.
+Change this credential from the RMS Settings page before field use. Additional
+operator or viewer accounts can be created later from Settings. Do not expose
+the RMS to untrusted networks while the default credential is active.
 
 For the step-by-step version of these instructions, including screenshots-to-use
 checkpoints, read

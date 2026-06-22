@@ -3,19 +3,14 @@
 This folder packages the Project HORIZON TP-ARC Remote Monitoring System as a
 small Raspberry Pi service.
 
-## Install
+This is the older v1.5 package copy. For new installs, use the current
+`dashboard/v1.5.1` package, which removes remote firmware upload and includes
+the full fresh-install reset script `uninstall_all.sh`.
 
-1. Copy or extract this package on the Raspberry Pi.
-
-2. Enter the package folder:
-
-```bash
-cd tparc-rms-pi-app
-```
-
-3. Run the installer:
+Copy this folder to the Raspberry Pi, then run:
 
 ```bash
+cd app
 sudo bash install.sh
 ```
 
@@ -36,47 +31,25 @@ The installer also adds the service user to `dialout` when that group exists,
 so USB serial devices such as `/dev/ttyACM0` can be opened by the service.
 Reboot if serial access is still denied after install.
 
-4. Check service status:
+After install:
 
 ```bash
 sudo systemctl status tparc-rms
-```
-
-5. Follow logs if needed:
-
-```bash
 journalctl -u tparc-rms -f
 ```
 
-6. Find the Pi IP:
-
-```bash
-hostname -I
-```
-
-7. Open this URL from a browser on the same network:
+Open:
 
 ```text
 http://<raspberry-pi-ip>:5000/login
 ```
 
-8. Log in as `tparc` / `tparc0322`, then change default passwords in Settings.
-
 ## Update
 
-Manual update:
-
-1. Extract the newer package on the Pi.
-
-2. Enter the extracted folder:
+When you receive a newer TP-ARC RMS package, extract it on the Pi and run:
 
 ```bash
 cd tparc-rms-pi-app
-```
-
-3. Run the local updater:
-
-```bash
 sudo bash update.sh
 ```
 
@@ -85,12 +58,7 @@ Update replaces the app launcher, refreshes Python packages inside
 `tparc-rms.service`. It preserves `/etc/tparc-rms/tparc-rms.env` and
 `/var/lib/tparc-rms`.
 
-Automatic GitHub update:
-
-1. Make sure the newest package exists as a GitHub Release asset, or is
-   committed somewhere under `dashboard/`.
-
-2. Run:
+For automatic GitHub updates from `xav200405/Project-HORIZON`, run:
 
 ```bash
 sudo bash /opt/tparc-rms/update.sh
@@ -106,14 +74,8 @@ which defaults to `dashboard`. Future folders such as
 If the repository changes later, edit `TPARC_UPDATE_REPO` in
 `/etc/tparc-rms/tparc-rms.env`.
 
-Default bootstrap user:
-
-| Username | Password | Role |
-| --- | --- | --- |
-| `tparc` | `tparc0322` | `admin` |
-
-Change this from Settings before field or shared-network use. Add operator or
-viewer accounts later from Settings if required.
+The current `dashboard/v1.5.1` package creates only the `tparc` admin account
+by default. Add operator or viewer accounts later from Settings if required.
 
 ## Configure
 
@@ -133,47 +95,6 @@ TPARC_SESSION_MINUTES=30
 TPARC_RMS_KILL_ENABLED=0
 ```
 
-After editing config:
-
-```bash
-sudo systemctl restart tparc-rms
-```
-
-## Page Guide
-
-| Page | Use It For |
-| --- | --- |
-| Overview | Client-presentable live telemetry summary, graph, analysis, and current fields. |
-| Telemetry | Detailed engineering view with graphs, PID, motors, RC input, exports, and raw values. |
-| Network | Serial and browser link health. |
-| Settings | Users, roles, audit log, thresholds, and calibration trigger. |
-
-## Troubleshooting
-
-### Browser Cannot Connect
-
-Check the Pi IP:
-
-```bash
-hostname -I
-```
-
-Check the service:
-
-```bash
-sudo systemctl status tparc-rms
-```
-
-### Serial Shows Simulated Data
-
-List ports:
-
-```bash
-python3 -m serial.tools.list_ports
-```
-
-Set `TPARC_SERIAL_PORT` in `/etc/tparc-rms/tparc-rms.env`, then restart.
-
 If you do not want the installer to run `apt-get`, set:
 
 ```bash
@@ -188,15 +109,19 @@ sudo apt install python3 python3-venv python3-pip ca-certificates
 
 ## Uninstall
 
-Standard uninstall removes the service, app files, and config while keeping
-telemetry data in `/var/lib/tparc-rms`:
-
 ```bash
 sudo bash uninstall.sh
 ```
 
-For a fresh-install reset that removes all RMS traces, including the database,
-telemetry data, config, service, app files, and runtime cache, run:
+By default, uninstall keeps `/var/lib/tparc-rms` so telemetry and user data are
+not deleted accidentally. To remove data too:
+
+```bash
+sudo bash uninstall.sh --purge-data
+```
+
+For the newer one-click full reset workflow, extract the current `v1.5.1`
+package and run:
 
 ```bash
 sudo bash uninstall_all.sh

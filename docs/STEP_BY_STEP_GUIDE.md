@@ -14,15 +14,14 @@ batteries, RF links, or flight hardware.
 - The latest `tparc-rms-pi-app-*.tar.gz` package from this repository.
 - Admin login for the RMS.
 
-Default first-run accounts:
+Default first-run account:
 
 | Username | Password | Role |
 | --- | --- | --- |
 | `tparc` | `tparc0322` | `admin` |
-| `operator` | `change-me-operator` | `operator` |
-| `viewer` | `change-me-viewer` | `viewer` |
 
-Change these passwords from Settings before field use.
+Change this password from Settings before field use. Create operator or viewer
+accounts later only when needed.
 
 ## 2. Install The RMS On A Raspberry Pi
 
@@ -31,7 +30,7 @@ Change these passwords from Settings before field use.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.13.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.15.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -150,7 +149,9 @@ Use Telemetry for detailed engineering review:
 - Raw telemetry.
 - Current fields.
 - Full live telemetry table.
-- CSV, JSON, PDF, and PNG exports.
+- CSV and JSON data exports.
+- Report PDF export.
+- Current graph PDF and image exports.
 
 ### Battery Display
 

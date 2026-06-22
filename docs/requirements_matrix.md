@@ -47,7 +47,7 @@ Source: project prompt supplied during development.
 | bcrypt password hashing and RBAC | `dashboard/app/auth.py` |
 | Login, session timeout, brute-force lockout | `dashboard/app/auth.py`, templates |
 | PID tuning, battery thresholds, calibration trigger, and optional disabled-by-default RMS kill command | `dashboard/app/routes.py`, `dashboard/app/serial_worker.py` |
-| CSV/PDF/PNG export support | `dashboard/app/routes.py`, frontend chart export |
+| CSV/JSON/report PDF export and graph PDF/image export support | `dashboard/app/routes.py`, frontend chart export |
 | Dashboard panels and alert banner | `dashboard/app/templates/dashboard.html`, static JS/CSS |
 
 ## Known deployment work

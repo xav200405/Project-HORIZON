@@ -40,10 +40,47 @@
   </section>
 
   <main class="dashboard-grid">
+    <section class="overview-band overview-only data-view">
+      <div>
+        <p class="eyebrow">Live Telemetry</p>
+        <h1>Telemetry Overview</h1>
+      </div>
+      <div class="overview-status">
+        <span><b id="overviewState">NO_DATA</b><small>State</small></span>
+        <span><b id="overviewMode">-</b><small>Mode</small></span>
+        <span><b id="overviewSamples">0</b><small>Samples</small></span>
+        <span><b id="overviewPeakTilt">0.0 deg</b><small>Peak tilt</small></span>
+        <span><b id="overviewMotorSpread">0 us</b><small>Motor spread</small></span>
+      </div>
+    </section>
+
+    <section class="panel graph-panel data-view">
+      <div class="panel-heading">
+        <div>
+          <h2>Telemetry Graphs</h2>
+          <small id="chartStatus">Waiting for telemetry</small>
+        </div>
+        <div class="tabs" id="chartTabs"></div>
+      </div>
+      <canvas id="telemetryChart"></canvas>
+      <div class="graph-toolbar">
+        <div class="series" id="seriesToggles"></div>
+        <div class="time-windows">
+          <button data-window="10">10s</button>
+          <button data-window="60">1m</button>
+          <button data-window="300">5m</button>
+          <button data-window="1800">30m</button>
+          <button data-window="full">Full</button>
+          <button id="jumpLive" class="hidden">Jump to live</button>
+        </div>
+      </div>
+    </section>
+
     <section class="metric-card battery-card data-view" id="batteryCard">
       <h2>Battery</h2>
       <div class="metric-large" id="batteryVoltage">No data</div>
-      <div id="cellVoltage">-- V/cell</div>
+      <div id="cellVoltage">-- V on A0</div>
+      <div id="batteryStatus" class="metric-note">A0 waiting</div>
       <div class="soc-row"><span id="batterySoc">0%</span><div class="soc-track"><div id="socFill"></div></div></div>
     </section>
     <section class="metric-card data-view">
@@ -63,34 +100,6 @@
       <div class="metric-large"><span id="sampleRateHz">0.0</span> Hz</div>
       <div>Controller <span id="controllerMs">0</span> ms</div>
       <div>Overrun <span id="loopOverrun">0</span></div>
-    </section>
-
-    <section class="overview-band overview-only data-view">
-      <div>
-        <p class="eyebrow">Live Telemetry</p>
-        <h1>Telemetry Overview</h1>
-      </div>
-      <div class="overview-status">
-        <span><b id="overviewState">NO_DATA</b><small>State</small></span>
-        <span><b id="overviewMode">-</b><small>Mode</small></span>
-        <span><b id="overviewSamples">0</b><small>Samples</small></span>
-        <span><b id="overviewPeakTilt">0.0 deg</b><small>Peak tilt</small></span>
-        <span><b id="overviewMotorSpread">0 us</b><small>Motor spread</small></span>
-      </div>
-    </section>
-
-    <section class="panel graph-panel data-view">
-      <div class="tabs" id="chartTabs"></div>
-      <canvas id="telemetryChart"></canvas>
-      <div class="series" id="seriesToggles"></div>
-      <div class="time-windows">
-        <button data-window="10">10s</button>
-        <button data-window="60">1m</button>
-        <button data-window="300">5m</button>
-        <button data-window="1800">30m</button>
-        <button data-window="full">Full</button>
-        <button id="jumpLive" class="hidden">Jump to live</button>
-      </div>
     </section>
 
     <aside class="panel side-panel telemetry-detail data-view">
@@ -183,12 +192,12 @@
       </div>
     </section>
 
-    <section class="panel fields-panel data-view">
+    <section class="panel fields-panel telemetry-detail data-view">
       <h2>Current Fields</h2>
       <div id="fieldCatalog" class="field-catalog"></div>
     </section>
 
-    <details class="panel live-table-panel data-view" {% if view == 'telemetry' %}open{% endif %}>
+    <details class="panel live-table-panel telemetry-detail data-view" {% if view == 'telemetry' %}open{% endif %}>
       <summary class="live-table-header">
         <h2>All Live Telemetry</h2>
         <div class="live-table-stats">
@@ -271,7 +280,7 @@
   </main>
 
   <footer class="footer">
-    <span>TP-ARC 2026.06-rev01.7</span>
+    <span>TP-ARC 2026.06-rev01.9</span>
     <span>TLS <b id="tlsStatus">active</b></span>
     <span>Role {{ user.role }}</span>
     <span id="sessionCountdown">30:00</span>

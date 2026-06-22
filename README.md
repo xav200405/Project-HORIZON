@@ -141,9 +141,9 @@ allocation, fixed control-loop periods via `micros()`, `Wire.h` for I2C,
 
 Current deployment defaults:
 
-- `BATTERY_MONITOR_ENABLED = true` for the verified A0 4S LiPo voltage-divider
-  hardware. Firmware emits pack voltage, cell voltage, SoC, alarm level, and
-  validity in JSON telemetry.
+- `BATTERY_MONITOR_ENABLED = true` for the verified A0 stepped-down monitor
+  signal. Firmware treats 5.00V on A0 as 100% and emits monitor voltage,
+  battery percentage, alarm level, and validity in JSON telemetry.
 - `COMPASS_REQUIRED_TO_ARM = false`, so missing compass data falls back to
   yaw-rate command mode instead of silently blocking all arming.
 - The physical CH6 transmitter kill switch is the active bring-up kill path.

@@ -31,7 +31,7 @@ Change these passwords from Settings before field use.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.7.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.9.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -134,10 +134,8 @@ http://<raspberry-pi-ip>:5000/login
 Use Overview for client-presentable monitoring:
 
 - Battery, heading, attitude, and loop-rate summary.
-- Main telemetry graph.
+- Main Power graph first, with Attitude, Motors, Control, and Health groups.
 - Telemetry analysis summary.
-- Current fields.
-- Collapsible full live telemetry table.
 
 ### Telemetry
 
@@ -150,7 +148,26 @@ Use Telemetry for detailed engineering review:
 - Sensor fusion.
 - System state.
 - Raw telemetry.
+- Current fields.
+- Full live telemetry table.
 - CSV, JSON, PDF, and PNG exports.
+
+### Battery Display
+
+The RMS expects the flight controller to emit battery telemetry from the A0
+stepped-down monitor signal. The dashboard treats 5.00V on A0 as 100%.
+It recognizes `battery_voltage`, `battery_monitor_voltage`, `battery_soc`,
+`battery_percent`, `battery_alarm`, `battery_valid`, and
+`battery_monitor_enabled`.
+
+If the Battery card says `No signal`:
+
+1. Confirm the Arduino firmware has `BATTERY_MONITOR_ENABLED true`.
+2. Confirm the divider output is connected to Arduino A0, not a Raspberry Pi
+   GPIO pin.
+3. Open Network and check the latest raw serial line for `battery_voltage`.
+4. If voltage is shown but marked invalid, check that A0 never exceeds 5V and
+   check the percentage threshold settings.
 
 ### Network
 
@@ -173,7 +190,7 @@ Admin-only page for:
 - User creation and password changes.
 - Roles.
 - Audit log.
-- Battery alarm thresholds.
+- Battery percentage alarm thresholds.
 - Calibration trigger.
 
 ## 5. Upload Arduino Firmware Through The RMS

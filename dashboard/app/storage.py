@@ -171,7 +171,9 @@ def telemetry_summary(db_path, start_ts=None, end_ts=None):
         "ch4",
         "ch5",
         "ch6",
+        "battery_soc",
         "battery_voltage",
+        "battery_monitor_voltage",
     ]
     numeric = {}
     for field in numeric_fields:

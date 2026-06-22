@@ -79,11 +79,11 @@
       </div>
     </section>
     <section class="panel settings-card">
-      <h2>Alarm thresholds</h2>
+      <h2>Battery thresholds</h2>
       <div class="settings-form">
-        <label>Low voltage <input id="thrLow" type="number" step="0.1" value="14.0"></label>
-        <label>Critical voltage <input id="thrCritical" type="number" step="0.1" value="13.2"></label>
-        <label>Emergency voltage <input id="thrEmergency" type="number" step="0.1" value="12.4"></label>
+        <label>Low percent <input id="thrLow" type="number" step="1" min="0" max="100" value="30"></label>
+        <label>Critical percent <input id="thrCritical" type="number" step="1" min="0" max="100" value="20"></label>
+        <label>Emergency percent <input id="thrEmergency" type="number" step="1" min="0" max="100" value="10"></label>
         <button id="saveThresholds">Send thresholds</button>
       </div>
       <h2>Remote calibration</h2>

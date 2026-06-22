@@ -12,7 +12,7 @@ const socket = socketAvailable
       on() {},
     };
 const history = [];
-let activeTab = "Attitude";
+let activeTab = "Power";
 let windowSeconds = 60;
 let live = true;
 let sessionStart = Date.now();
@@ -34,17 +34,11 @@ const TABLE_FRAME_MS = 700;
 const MAX_HISTORY_POINTS = 7200;
 
 const tabs = {
+  Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
   Attitude: [["roll", "Roll"], ["pitch", "Pitch"], ["yaw", "Heading"], ["heading_error", "Head err"]],
-  Gyro: [["gyro_roll_rate", "Roll rate"], ["gyro_pitch_rate", "Pitch rate"], ["gyro_yaw_rate", "Yaw rate"]],
-  Commands: [["roll_cmd", "Roll cmd"], ["pitch_cmd", "Pitch cmd"], ["yaw_cmd", "Yaw cmd"]],
   Motors: [["m1", "M1"], ["m2", "M2"], ["m3", "M3"], ["m4", "M4"]],
-  "PID output": [["pid_roll", "Roll"], ["pid_pitch", "Pitch"], ["pid_yaw", "Yaw"]],
-  "PID gains": [["pid_roll_p", "Roll P"], ["pid_pitch_p", "Pitch P"], ["pid_yaw_p", "Yaw P"]],
-  Compass: [["mag_x", "Mag X"], ["mag_y", "Mag Y"], ["mag_z", "Mag Z"], ["compass_flatline_count", "Flatline"]],
-  Battery: [["battery_voltage", "Pack voltage"]],
-  "RC input": [["throttle", "Throttle"], ["rc_roll", "Roll"], ["rc_pitch", "Pitch"], ["rc_yaw", "Yaw"]],
-  "RC raw": [["ch1", "CH1"], ["ch2", "CH2"], ["ch3", "CH3"], ["ch4", "CH4"], ["ch5", "CH5"], ["ch6", "CH6"]],
-  System: [["rx_ok", "RX"], ["imu_ok", "IMU"], ["compass_ok", "Compass"], ["loop_overrun", "Overrun"]],
+  Control: [["throttle", "Throttle"], ["rc_roll", "RC roll"], ["rc_pitch", "RC pitch"], ["rc_yaw", "RC yaw"], ["roll_cmd", "Roll cmd"], ["pitch_cmd", "Pitch cmd"], ["yaw_cmd", "Yaw cmd"]],
+  Health: [["rx_ok", "RX"], ["imu_ok", "IMU"], ["compass_ok", "Compass"], ["loop_overrun", "Overrun"]],
 };
 const enabledSeries = new Set();
 Object.values(tabs).flat().forEach(([key]) => enabledSeries.add(key));
@@ -93,9 +87,13 @@ const fieldLabels = {
   motor_front_right: "Motor front right",
   motor_back_left: "Motor back left",
   motor_back_right: "Motor back right",
-  battery_voltage: "Battery",
-  battery_cell_voltage: "Cell voltage",
-  battery_soc: "Battery SOC",
+  battery_voltage: "A0 voltage",
+  battery_monitor_voltage: "A0 voltage",
+  battery_cell_voltage: "Legacy battery voltage",
+  battery_full_scale_voltage: "Battery full scale",
+  battery_monitor_enabled: "Battery monitor",
+  battery_adc: "Battery ADC",
+  battery_soc: "Battery",
   battery_alarm: "Battery alarm",
   battery_valid: "Battery data",
 };
@@ -114,7 +112,9 @@ const fieldUnits = {
   pitch_cmd: "deg",
   yaw_cmd: "deg/s",
   battery_voltage: "V",
-  battery_cell_voltage: "V/cell",
+  battery_monitor_voltage: "V",
+  battery_cell_voltage: "V",
+  battery_full_scale_voltage: "V",
   battery_soc: "%",
   throttle: "",
   rc_roll: "",
@@ -137,7 +137,7 @@ const fieldUnits = {
 
 const booleanFields = new Set([
   "armed", "lockout", "rx_ok", "imu_ok", "sensors_ok", "gyro_calibrated",
-  "compass_ok", "heading_lock", "battery_valid", "loop_overrun",
+  "compass_ok", "heading_lock", "battery_monitor_enabled", "battery_valid", "loop_overrun",
 ]);
 
 class TelemetryChart {
@@ -387,7 +387,8 @@ function updateChart() {
   const now = Date.now() / 1000;
   const minTime = windowSeconds === "full" ? 0 : now - windowSeconds;
   const points = history.filter(p => Number(p.timestamp) >= minTime);
-  chart.data.datasets = tabs[activeTab]
+  const selectedSeries = tabs[activeTab].filter(([key]) => enabledSeries.has(key));
+  chart.data.datasets = selectedSeries
     .filter(([key]) => enabledSeries.has(key))
     .map(([key, label], index) => ({
       label,
@@ -398,8 +399,15 @@ function updateChart() {
     }));
   chart.options.scales.x.min = windowSeconds === "full" ? undefined : minTime;
   chart.options.scales.x.max = live ? now : undefined;
-  chart.options.scales.y.min = activeTab === "Motors" || activeTab === "RC raw" ? 1000 : activeTab === "Battery" ? 12 : activeTab === "RC input" ? -1 : undefined;
-  chart.options.scales.y.max = activeTab === "Motors" || activeTab === "RC raw" ? 2000 : activeTab === "Battery" ? 17 : activeTab === "RC input" ? 1 : undefined;
+  chart.options.scales.y.min = activeTab === "Motors" ? 1000 : undefined;
+  chart.options.scales.y.max = activeTab === "Motors" ? 2000 : undefined;
+  const finiteCount = chart.finitePoints().length;
+  const status = finiteCount
+    ? `${finiteCount} plotted samples in ${windowSeconds === "full" ? "the full recording" : `${windowSeconds}s`}`
+    : points.length
+      ? `No numeric samples yet for ${activeTab}`
+      : "Waiting for telemetry";
+  setText("chartStatus", status);
   chart.update("none");
 }
 
@@ -410,16 +418,27 @@ function downsample(points) {
 }
 
 function updateBattery(data) {
-  const valid = data.battery_valid === 1;
-  qs("batteryVoltage").textContent = valid ? `${fixed(data.battery_voltage, 2)}V` : "No data";
-  qs("cellVoltage").textContent = valid ? `${fixed(data.battery_cell_voltage, 2)}V/cell` : "-- V/cell";
-  qs("batterySoc").textContent = `${data.battery_soc ?? 0}%`;
+  const voltage = Number(data.battery_voltage);
+  const fullScale = Number(data.battery_full_scale_voltage ?? 5);
+  const calculatedSoc = Number.isFinite(voltage) && voltage > 0 && Number.isFinite(fullScale) && fullScale > 0
+    ? (voltage / fullScale) * 100
+    : 0;
+  const soc = clamp(Number.isFinite(Number(data.battery_soc)) ? Number(data.battery_soc) : calculatedSoc, 0, 100);
+  const monitorEnabled = Number(data.battery_monitor_enabled ?? 0) === 1;
+  const hasVoltage = Number.isFinite(voltage) && voltage > 0;
+  const valid = Number(data.battery_valid ?? 0) === 1;
+  const alarm = Number(data.battery_alarm ?? 0);
+  qs("batteryVoltage").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "No signal";
+  qs("cellVoltage").textContent = hasVoltage ? `${fixed(voltage, 2)}V on A0` : "A0 idle";
+  qs("batterySoc").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "--";
+  setText("batteryStatus", hasVoltage ? (valid ? "5.00V = 100%" : "A0 reading outside 0-5V range") : (monitorEnabled ? "A0 enabled, no voltage" : "Monitor inactive"));
   const fill = qs("socFill");
-  fill.style.width = `${Math.max(0, Math.min(100, data.battery_soc ?? 0))}%`;
-  fill.style.background = data.battery_soc < 20 ? "#bd1e1e" : data.battery_soc <= 50 ? "#b56b00" : "#138a4b";
+  fill.style.width = `${hasVoltage ? soc : 0}%`;
+  fill.style.background = !hasVoltage || soc < 20 ? "#bd1e1e" : soc <= 50 ? "#b56b00" : "#138a4b";
   const card = qs("batteryCard");
-  card.style.borderColor = data.battery_alarm >= 3 ? "#bd1e1e" : data.battery_alarm >= 1 ? "#b56b00" : "#d8dee9";
-  if (data.battery_alarm > 0) showBatteryAlert(data);
+  card.classList.toggle("battery-warning", hasVoltage && (alarm > 0 || !valid));
+  card.style.borderColor = alarm >= 3 ? "#bd1e1e" : alarm >= 1 || (hasVoltage && !valid) ? "#b56b00" : "#d8dee9";
+  if (alarm > 0 && hasVoltage) showBatteryAlert({ ...data, battery_alarm: alarm });
 }
 
 function showBatteryAlert(data) {
@@ -428,7 +447,7 @@ function showBatteryAlert(data) {
   banner.classList.remove("hidden");
   banner.style.background = data.battery_alarm >= 2 ? "#bd1e1e" : "#b56b00";
   qs("alertTitle").textContent = `Battery ${names[data.battery_alarm]}`;
-  qs("alertMessage").textContent = `${fixed(data.battery_voltage, 2)}V pack, ${fixed(data.battery_cell_voltage, 2)}V/cell. Land and inspect power system.`;
+  qs("alertMessage").textContent = `${fixed(data.battery_soc, 0)}% battery, ${fixed(data.battery_voltage, 2)}V on A0. Land and inspect power system.`;
   qs("dismissAlert").style.display = data.battery_alarm === 1 ? "inline-block" : "none";
   if (data.battery_alarm >= 2) beep();
 }
@@ -511,7 +530,7 @@ function updateTelemetry(data) {
   qs("magXValue").textContent = fmt(data.mag_x, 0);
   qs("magYValue").textContent = fmt(data.mag_y, 0);
   qs("magZValue").textContent = fmt(data.mag_z, 0);
-  if (currentView !== "network") {
+  if (currentView === "telemetry") {
     const uiNow = performance.now();
     if (uiNow - lastFieldCatalogRender >= FIELD_FRAME_MS) {
       lastFieldCatalogRender = uiNow;
@@ -558,6 +577,7 @@ function updateLiveTelemetryTable(data) {
   if (!table) return;
   const priority = [
     "timestamp", "packet_type", "controller_ms", "state", "mode", "armed", "lockout",
+    "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "battery_adc",
     "roll", "pitch", "yaw", "heading", "heading_setpoint", "heading_error", "heading_lock",
     "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "roll_cmd", "pitch_cmd", "yaw_cmd",
     "pid_roll", "pid_pitch", "pid_yaw", "pid_roll_p", "pid_roll_i", "pid_roll_d",
@@ -705,7 +725,7 @@ function updatePidFromTelemetry(data) {
 
 function updateFieldCatalog(data) {
   const priority = [
-    "state", "mode", "armed", "lockout", "roll", "pitch", "yaw", "heading_error",
+    "state", "mode", "armed", "lockout", "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "roll", "pitch", "yaw", "heading_error",
     "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "m1", "m2", "m3", "m4",
     "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "compass_status", "loop_overrun",
   ];

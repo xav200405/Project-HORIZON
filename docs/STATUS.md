@@ -18,8 +18,8 @@ Current flight controller firmware identity:
 
 ## Current hardware bring-up defaults
 
-- `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 4S LiPo voltage-divider hardware.
-- Battery telemetry now reports pack voltage, cell voltage, SoC, alarm level, validity, and active thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
+- `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 stepped-down monitor signal.
+- Battery telemetry now reports A0 monitor voltage, percentage where 5.00V is 100%, alarm level, validity, and active percentage thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
 - Flight controller and Calibration Wizard both use the archived PCB receiver map: CH1 roll D7, CH2 pitch D8, CH3 throttle D5, CH4 yaw D4.

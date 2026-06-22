@@ -8,17 +8,17 @@ TP-ARC Remote Monitoring System.
 Use this archive:
 
 ```bash
-dist/tparc-rms-pi-app-2026.06-rev01.7.tar.gz
+dist/tparc-rms-pi-app-2026.06-rev01.9.tar.gz
 ```
 
 ## Install On The Raspberry Pi
 
-1. Copy `dist/tparc-rms-pi-app-2026.06-rev01.7.tar.gz` to the Pi.
+1. Copy `dist/tparc-rms-pi-app-2026.06-rev01.9.tar.gz` to the Pi.
 
 2. Extract it:
 
 ```bash
-tar -xzf tparc-rms-pi-app-2026.06-rev01.7.tar.gz
+tar -xzf tparc-rms-pi-app-2026.06-rev01.9.tar.gz
 ```
 
 3. Enter the extracted folder:

@@ -108,6 +108,11 @@ button:disabled { opacity: .5; cursor: not-allowed; }
 h1, h2 { margin: 0 0 12px; }
 h2 { font-size: 15px; }
 .metric-large { font-size: 28px; font-weight: 700; }
+.metric-note {
+  color: var(--muted);
+  font-size: 12px;
+  min-height: 18px;
+}
 .metric-card h2, .panel h2, .network-card h2 {
   color: #334155;
   font-size: 13px;
@@ -121,6 +126,9 @@ h2 { font-size: 15px; }
 .soc-row { display: grid; grid-template-columns: 46px 1fr; gap: 8px; align-items: center; margin-top: 10px; }
 .soc-track { height: 10px; background: #e5e7eb; border-radius: 999px; overflow: hidden; }
 #socFill { height: 100%; width: 0%; background: var(--green); }
+.battery-warning {
+  background: #fffaf0;
+}
 .compass, .horizon { width: 92px; height: 92px; border: 1px solid var(--line); border-radius: 50%; margin-bottom: 8px; position: relative; overflow: hidden; }
 #compassNeedle { width: 4px; height: 42px; background: var(--red); position: absolute; left: 43px; top: 6px; transform-origin: 50% 40px; }
 #horizonLine { height: 46px; background: #6aa6d9; border-bottom: 3px solid #6f4e37; transform-origin: 50% 100%; }
@@ -177,18 +185,36 @@ body[data-view="network"] .data-view { display: none !important; }
   overflow-wrap: anywhere;
 }
 .overview-status small { color: #cbd5e1; }
-.graph-panel { grid-column: span 3; min-height: 430px; }
-body[data-view="ops"] .graph-panel { grid-column: span 4; }
+.graph-panel { grid-column: span 4; min-height: 520px; }
 .side-panel { grid-column: span 1; }
+.panel-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 8px;
+}
+.panel-heading h2 { margin-bottom: 2px; }
+.panel-heading small { color: var(--muted); }
 #telemetryChart {
   width: 100%;
-  height: 300px;
+  height: 360px;
   display: block;
   background: #fff;
   border: 1px solid var(--line);
   border-radius: 6px;
 }
 .tabs, .series, .time-windows, .button-row, .exports { display: flex; gap: 8px; flex-wrap: wrap; margin: 8px 0; }
+.graph-toolbar {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.graph-toolbar .series,
+.graph-toolbar .time-windows {
+  margin-bottom: 0;
+}
 .tabs button, .series button, .time-windows button {
   min-height: 32px;
   padding: 6px 10px;
@@ -213,6 +239,7 @@ body[data-view="ops"] .graph-panel { grid-column: span 4; }
 .kv dd { margin: 0; text-align: right; overflow-wrap: anywhere; }
 .raw-rc-grid span { font-size: 12px; }
 .analysis-panel { grid-column: span 2; }
+body[data-view="ops"] .analysis-panel { grid-column: span 4; }
 .fields-panel { grid-column: span 2; }
 .analysis-grid {
   display: grid;

@@ -295,10 +295,10 @@ def delete_user(user_id):
 @role_required("admin")
 def alarm_thresholds():
     data = request.get_json(force=True)
-    low = float(data.get("low", 14.0))
-    critical = float(data.get("critical", 13.2))
-    emergency = float(data.get("emergency", 12.4))
-    if not (12.0 <= emergency < critical < low <= 16.8):
+    low = float(data.get("low", 30.0))
+    critical = float(data.get("critical", 20.0))
+    emergency = float(data.get("emergency", 10.0))
+    if not (0.0 <= emergency < critical < low <= 100.0):
         return {"error": "range"}, 400
     serial_worker.send(f"BAT:LOW={low:.2f},CRIT={critical:.2f},EMERG={emergency:.2f}\n")
     audit(current_app.config["DATABASE"], session["username"], "ALARM_THRESHOLD_CHANGE", data, request.remote_addr)

@@ -21,8 +21,8 @@ Source: project prompt supplied during development.
 
 | Requirement | Implementation |
 |---|---|
-| 4S LiPo voltage divider on A0 | `updateBatteryMonitor()` |
-| Pack voltage, cell voltage, SoC, alarm thresholds | `BatteryState`, threshold constants, `handleBatteryCommand()` |
+| 0-5V stepped-down monitor signal on A0 | `updateBatteryMonitor()` |
+| A0 monitor voltage, battery percentage, alarm thresholds | `BatteryState`, threshold constants, `handleBatteryCommand()` |
 | Alarm levels LOW/CRITICAL/EMERGENCY | `classifyBatteryAlarm()` |
 | Telemetry fields for Pi dashboard | `printTelemetryJson()` emits `battery_voltage`, `battery_cell_voltage`, `battery_soc`, `battery_alarm`, `battery_valid` |
 | Pi parser and dashboard battery panel | `dashboard/app/telemetry.py`, `dashboard/app/static/js/dashboard.js` |

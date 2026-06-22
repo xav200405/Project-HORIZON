@@ -185,10 +185,8 @@ overwhelming the viewer.
 Use it for:
 
 - Battery, heading, attitude, and loop-rate status.
-- Main telemetry graph.
+- Main Power graph first, with Attitude, Motors, Control, and Health groups.
 - Telemetry analysis summary.
-- Current fields.
-- Collapsible full live telemetry table.
 
 ### Live Telemetry
 
@@ -208,6 +206,7 @@ It includes:
 - PID gains and outputs.
 - Sensor fusion values.
 - System state.
+- Current fields and full live telemetry table.
 - Flight analysis summary.
 - All live telemetry fields in a dense table.
 
@@ -281,7 +280,7 @@ Admin-only page for:
 - Editing usernames, roles, and passwords.
 - Deleting user accounts.
 - Viewing recent audit logs.
-- Sending battery alarm thresholds.
+- Sending battery percentage alarm thresholds.
 - Triggering the calibration command.
 
 The Settings page prevents deleting the currently logged-in account and prevents removing the last remaining admin.

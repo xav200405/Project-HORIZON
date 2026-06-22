@@ -76,6 +76,42 @@ JSON_ALIASES = {
     "mFR": "motor_front_right",
     "mBL": "motor_back_left",
     "mBR": "motor_back_right",
+    "batteryMonitorEnabled": "battery_monitor_enabled",
+    "batteryEnabled": "battery_monitor_enabled",
+    "batteryVoltage": "battery_voltage",
+    "batteryV": "battery_voltage",
+    "batteryMonitorVoltage": "battery_monitor_voltage",
+    "batteryMonitorV": "battery_monitor_voltage",
+    "monitorVoltage": "battery_monitor_voltage",
+    "monitorV": "battery_monitor_voltage",
+    "battVoltage": "battery_voltage",
+    "battV": "battery_voltage",
+    "packVoltage": "battery_voltage",
+    "packV": "battery_voltage",
+    "vbat": "battery_voltage",
+    "VBAT": "battery_voltage",
+    "batteryCellVoltage": "battery_cell_voltage",
+    "batteryCellV": "battery_cell_voltage",
+    "cellVoltage": "battery_cell_voltage",
+    "cellV": "battery_cell_voltage",
+    "batterySOC": "battery_soc",
+    "batterySoc": "battery_soc",
+    "batteryPercent": "battery_soc",
+    "battery_percentage": "battery_soc",
+    "battery_percent": "battery_soc",
+    "battSoc": "battery_soc",
+    "soc": "battery_soc",
+    "batteryAlarm": "battery_alarm",
+    "battAlarm": "battery_alarm",
+    "batteryValid": "battery_valid",
+    "batteryOK": "battery_valid",
+    "battValid": "battery_valid",
+    "batteryAdc": "battery_adc",
+    "batteryADC": "battery_adc",
+    "batteryFullScaleVoltage": "battery_full_scale_voltage",
+    "batteryFullScaleV": "battery_full_scale_voltage",
+    "adc0": "battery_adc",
+    "adc0Raw": "battery_adc",
 }
 
 JSON_TEXT_FIELDS = {
@@ -107,6 +143,7 @@ JSON_INT_FIELDS = {
     "compass_bad_reason",
     "compass_flatline_count",
     "battery_monitor_enabled",
+    "battery_adc",
     "battery_soc",
     "battery_alarm",
     "battery_valid",
@@ -152,6 +189,28 @@ def _normalize_throttle(value):
     return max(0.0, min(1.0, (_as_float(value, 1000) - 1000.0) / 1000.0))
 
 
+def _normalize_battery_payload(payload):
+    if "battery_monitor_voltage" in payload and "battery_voltage" not in payload:
+        payload["battery_voltage"] = payload["battery_monitor_voltage"]
+    if "battery_monitor_voltage" not in payload and "battery_voltage" in payload:
+        payload["battery_monitor_voltage"] = payload["battery_voltage"]
+
+    voltage = _as_float(payload.get("battery_voltage"), 0.0)
+    has_voltage = voltage > 0.0
+
+    if "battery_monitor_enabled" not in payload:
+        payload["battery_monitor_enabled"] = 1 if has_voltage else 0
+    if "battery_valid" not in payload:
+        payload["battery_valid"] = 1 if has_voltage else 0
+    if "battery_alarm" not in payload:
+        payload["battery_alarm"] = 0
+    if "battery_soc" not in payload:
+        full_scale = _as_float(payload.get("battery_full_scale_voltage"), 5.0) or 5.0
+        payload["battery_soc"] = int(max(0.0, min(100.0, (voltage / full_scale) * 100.0)) + 0.5) if has_voltage else 0
+    if "battery_full_scale_voltage" not in payload:
+        payload["battery_full_scale_voltage"] = 5.0
+
+
 def _parse_json_packet(raw, event):
     try:
         data = json.loads(raw)
@@ -194,12 +253,7 @@ def _parse_json_packet(raw, event):
         payload["rc_yaw"] = _normalize_axis(payload["ch4"])
     if "heading_lock" in payload:
         payload["heading_mode"] = "HOLD" if payload["heading_lock"] else "COMMAND"
-    if "battery_valid" not in payload:
-        payload["battery_valid"] = 0
-    if "battery_alarm" not in payload:
-        payload["battery_alarm"] = 0
-    if "battery_soc" not in payload:
-        payload["battery_soc"] = 0
+    _normalize_battery_payload(payload)
     return payload
 
 
@@ -233,6 +287,7 @@ def parse_telemetry_line(line):
                     payload[field] = None
             elif key in TEXT_FIELDS:
                 payload[TEXT_FIELDS[key]] = value
+        _normalize_battery_payload(payload)
         return payload
     if raw.startswith("EVT:"):
         event["event"] = raw[4:]
@@ -319,7 +374,11 @@ def default_state():
         "pid_pitch": 0.0,
         "pid_yaw": 0.0,
         "battery_voltage": 0.0,
+        "battery_monitor_voltage": 0.0,
         "battery_cell_voltage": 0.0,
+        "battery_full_scale_voltage": 5.0,
+        "battery_monitor_enabled": 0,
+        "battery_adc": 0,
         "battery_soc": 0,
         "battery_alarm": 0,
         "battery_valid": 0,

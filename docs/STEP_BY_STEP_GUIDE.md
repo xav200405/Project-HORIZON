@@ -31,7 +31,7 @@ Change these passwords from Settings before field use.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.9.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.10.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.

@@ -420,6 +420,8 @@ function downsample(points) {
 function updateBattery(data) {
   const voltage = Number(data.battery_voltage);
   const fullScale = Number(data.battery_full_scale_voltage ?? 5);
+  const packetFields = Array.isArray(data.fields) ? data.fields.map(field => String(field).toLowerCase()) : [];
+  const packetIncludesBattery = packetFields.some(field => field.includes("battery") || field === "vbat" || field === "bv");
   const calculatedSoc = Number.isFinite(voltage) && voltage > 0 && Number.isFinite(fullScale) && fullScale > 0
     ? (voltage / fullScale) * 100
     : 0;
@@ -431,7 +433,12 @@ function updateBattery(data) {
   qs("batteryVoltage").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "No signal";
   qs("cellVoltage").textContent = hasVoltage ? `${fixed(voltage, 2)}V on A0` : "A0 idle";
   qs("batterySoc").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "--";
-  setText("batteryStatus", hasVoltage ? (valid ? "5.00V = 100%" : "A0 reading outside 0-5V range") : (monitorEnabled ? "A0 enabled, no voltage" : "Monitor inactive"));
+  const missingTelemetry = packetFields.length > 0 && !packetIncludesBattery && !hasVoltage;
+  setText("batteryStatus", hasVoltage
+    ? (valid ? "5.00V = 100%" : "A0 reading outside 0-5V range")
+    : missingTelemetry
+      ? "No battery field in latest packet"
+      : (monitorEnabled ? "A0 enabled, no voltage" : "Monitor inactive"));
   const fill = qs("socFill");
   fill.style.width = `${hasVoltage ? soc : 0}%`;
   fill.style.background = !hasVoltage || soc < 20 ? "#bd1e1e" : soc <= 50 ? "#b56b00" : "#138a4b";

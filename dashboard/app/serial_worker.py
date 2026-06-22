@@ -127,6 +127,7 @@ class SerialWorker:
             battery_monitor_voltage=4.12,
             battery_full_scale_voltage=5.0,
             battery_cell_voltage=0.0,
+            battery_monitor_enabled=1,
             battery_soc=82,
             battery_alarm=0,
             battery_valid=1,

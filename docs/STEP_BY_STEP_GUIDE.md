@@ -30,7 +30,7 @@ accounts later only when needed.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.15.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.16.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.

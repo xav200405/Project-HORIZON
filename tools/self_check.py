@@ -10,6 +10,9 @@ JS = DASH / "static" / "js" / "dashboard.js"
 
 
 def active_flight_sketch():
+    preferred = ROOT / "firmware" / "flight_controller" / "controller_firmware_v2.6.1" / "controller_firmware_v2.6.1.ino"
+    if preferred.exists():
+        return preferred
     flight_root = ROOT / "firmware" / "flight_controller"
     candidates = sorted(
         flight_root.glob("*/**/*.ino"),
@@ -106,6 +109,9 @@ def main():
         ("WebSocket telemetry", r"socket\.on\(\"telemetry\""),
         ("telemetry chart renderer", r"new\s+(TelemetryChart|Chart)"),
         ("series toggles", r"enabledSeries"),
+        ("chart auto-selects populated telemetry tab", r"function bestTelemetryTab"),
+        ("chart distinguishes empty tab from no telemetry", r"Telemetry received; no .* samples in this window"),
+        ("API fallback allows changed stable-timestamp telemetry", r"lastFallbackSignature"),
         ("downsampling", r"function downsample"),
         ("PID range validation", r"kp >= 0.*kp <= 1.*ki >= 0.*ki <= 0\.5.*kd >= 0.*kd <= 0\.5", re.S),
         ("kill confirmation dialog", r"confirmKill"),

@@ -3,7 +3,7 @@
 This folder is an older standalone Raspberry Pi app drop for the Project
 HORIZON TP-ARC Remote Monitoring System. It is kept for history only.
 
-Use `dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.15.tar.gz` for the
+Use `dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.16.tar.gz` for the
 current simplified RMS package with remote firmware upload removed and
 `uninstall_all.sh` included.
 

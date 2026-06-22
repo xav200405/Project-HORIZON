@@ -24,10 +24,12 @@ let packetTimes = [];
 let networkEvents = [];
 let lastTelemetryArrival = 0;
 let lastStateTimestamp = 0;
+let lastFallbackSignature = "";
 let chartUpdatePending = false;
 let lastChartRender = 0;
 let lastFieldCatalogRender = 0;
 let lastLiveTableRender = 0;
+let userSelectedChartTab = false;
 const CHART_FRAME_MS = 150;
 const FIELD_FRAME_MS = 900;
 const TABLE_FRAME_MS = 700;
@@ -430,6 +432,13 @@ function normalizeTelemetryPacket(data) {
   packet.received_at = receivedAt;
   return packet;
 }
+function telemetrySignature(data) {
+  const parts = [
+    data?.timestamp, data?.raw, data?.controller_ms, data?.roll, data?.pitch, data?.yaw,
+    data?.battery_soc, data?.battery_voltage, data?.m1, data?.m2, data?.m3, data?.m4,
+  ];
+  return JSON.stringify(parts);
+}
 function formatFieldName(key) {
   if (fieldLabels[key]) return fieldLabels[key];
   return String(key)
@@ -476,7 +485,12 @@ function setupTabs() {
   Object.keys(tabs).forEach(name => {
     const button = document.createElement("button");
     button.textContent = name;
-    button.onclick = () => { activeTab = name; renderTabs(); updateChart(); };
+    button.onclick = () => {
+      userSelectedChartTab = true;
+      activeTab = name;
+      renderTabs();
+      updateChart();
+    };
     tabBox.appendChild(button);
   });
   renderTabs();
@@ -499,13 +513,33 @@ function renderTabs() {
   });
 }
 
+function selectedChartSeries(tabName) {
+  return (tabs[tabName] || []).filter(([key]) => enabledSeries.has(key));
+}
+
+function finiteChartCount(tabName, points) {
+  return selectedChartSeries(tabName).reduce((count, [key]) => {
+    return count + points.reduce((seriesCount, point) => seriesCount + (numericValue(point[key]) === null ? 0 : 1), 0);
+  }, 0);
+}
+
+function bestTelemetryTab(points) {
+  return Object.keys(tabs).find(name => finiteChartCount(name, points) > 0);
+}
+
 function updateChart() {
   const now = Date.now() / 1000;
   const minTime = windowSeconds === "full" ? 0 : now - windowSeconds;
   const points = history.filter(p => chartTimestamp(p) >= minTime);
-  const selectedSeries = tabs[activeTab].filter(([key]) => enabledSeries.has(key));
+  if (!userSelectedChartTab && points.length && finiteChartCount(activeTab, points) === 0) {
+    const nextTab = bestTelemetryTab(points);
+    if (nextTab && nextTab !== activeTab) {
+      activeTab = nextTab;
+      renderTabs();
+    }
+  }
+  const selectedSeries = selectedChartSeries(activeTab);
   chart.data.datasets = selectedSeries
-    .filter(([key]) => enabledSeries.has(key))
     .map(([key, label], index) => ({
       label,
       data: downsample(points.map(p => ({ x: chartTimestamp(p), y: numericValue(p[key]) }))),
@@ -521,7 +555,7 @@ function updateChart() {
   const status = finiteCount
     ? `${finiteCount} plotted samples in ${windowSeconds === "full" ? "the full recording" : `${windowSeconds}s`}`
     : points.length
-      ? `No numeric samples yet for ${activeTab}`
+      ? `Telemetry received; no ${activeTab} samples in this window`
       : "Waiting for telemetry";
   setText("chartStatus", status);
   chart.update("none");
@@ -800,7 +834,10 @@ async function refreshLatestStateFallback() {
     if (!res.ok) return;
     const data = await res.json();
     const timestamp = Number(data.timestamp);
-    if (!Number.isFinite(timestamp) || timestamp <= lastStateTimestamp) return;
+    const signature = telemetrySignature(data);
+    if (!Number.isFinite(timestamp)) return;
+    if (timestamp <= lastStateTimestamp && signature === lastFallbackSignature) return;
+    lastFallbackSignature = signature;
     updateTelemetry(data);
   } catch (_) {
     // Network state polling will surface connection health separately.

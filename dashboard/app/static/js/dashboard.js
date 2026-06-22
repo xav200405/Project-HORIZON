@@ -17,7 +17,11 @@ let windowSeconds = 60;
 let live = true;
 let sessionStart = Date.now();
 let pidEdit = false;
-let pidValues = { kp: 0.150, ki: 0.010, kd: 0.010 };
+let pidValues = {
+  roll: { kp: 0.180, ki: 0.010, kd: 0.000 },
+  pitch: { kp: 0.200, ki: 0.030, kd: 0.050 },
+  yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
+};
 let lastAnalysis = null;
 let telemetryPacketCount = 0;
 let packetTimes = [];
@@ -38,6 +42,7 @@ const MAX_HISTORY_POINTS = 7200;
 const tabs = {
   Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
   Attitude: [["roll", "Roll"], ["pitch", "Pitch"], ["yaw", "Heading"], ["heading_error", "Head err"]],
+  Barometer: [["baro_relative_altitude_m", "Relative alt"], ["baro_altitude_m", "Altitude"], ["baro_pressure_hpa", "Pressure"], ["baro_temperature_c", "Temp"]],
   Motors: [["m1", "M1"], ["m2", "M2"], ["m3", "M3"], ["m4", "M4"]],
   Control: [["throttle", "Throttle"], ["rc_roll", "RC roll"], ["rc_pitch", "RC pitch"], ["rc_yaw", "RC yaw"], ["roll_cmd", "Roll cmd"], ["pitch_cmd", "Pitch cmd"], ["yaw_cmd", "Yaw cmd"]],
   Health: [["rx_ok", "RX"], ["imu_ok", "IMU"], ["compass_ok", "Compass"], ["loop_overrun", "Overrun"]],
@@ -80,6 +85,18 @@ const fieldLabels = {
   compass_chip_id: "Compass chip",
   compass_bad_reason: "Compass fault",
   compass_flatline_count: "Compass flatline",
+  baro_ok: "Barometer",
+  baro_status: "Barometer status",
+  baro_chip_id: "Barometer chip",
+  baro_pressure_pa: "Barometer pressure",
+  baro_pressure_hpa: "Barometer pressure",
+  baro_temperature_c: "Barometer temperature",
+  baro_altitude_m: "Barometer altitude",
+  baro_relative_altitude_m: "Barometer relative altitude",
+  baro_raw_pressure: "Barometer raw pressure",
+  baro_raw_temperature: "Barometer raw temperature",
+  baro_baseline_raw: "Barometer baseline raw",
+  baro_baseline_pressure_pa: "Barometer baseline pressure",
   mag_x: "Mag X",
   mag_y: "Mag Y",
   mag_z: "Mag Z",
@@ -118,6 +135,12 @@ const fieldUnits = {
   battery_cell_voltage: "V",
   battery_full_scale_voltage: "V",
   battery_soc: "%",
+  baro_pressure_pa: "Pa",
+  baro_pressure_hpa: "hPa",
+  baro_temperature_c: "C",
+  baro_altitude_m: "m",
+  baro_relative_altitude_m: "m",
+  baro_baseline_pressure_pa: "Pa",
   throttle: "",
   rc_roll: "",
   rc_pitch: "",
@@ -139,7 +162,7 @@ const fieldUnits = {
 
 const booleanFields = new Set([
   "armed", "lockout", "rx_ok", "imu_ok", "sensors_ok", "gyro_calibrated",
-  "compass_ok", "heading_lock", "battery_monitor_enabled", "battery_valid", "loop_overrun",
+  "compass_ok", "baro_ok", "heading_lock", "battery_monitor_enabled", "battery_valid", "loop_overrun",
 ]);
 
 class TelemetryChart {
@@ -436,6 +459,7 @@ function telemetrySignature(data) {
   const parts = [
     data?.timestamp, data?.raw, data?.controller_ms, data?.roll, data?.pitch, data?.yaw,
     data?.battery_soc, data?.battery_voltage, data?.m1, data?.m2, data?.m3, data?.m4,
+    data?.baro_ok, data?.baro_pressure_pa, data?.baro_pressure_hpa, data?.baro_relative_altitude_m, data?.baro_temperature_c,
   ];
   return JSON.stringify(parts);
 }
@@ -598,6 +622,28 @@ function updateBattery(data) {
   if (alarm > 0 && hasVoltage) showBatteryAlert({ ...data, battery_alarm: alarm });
 }
 
+function updateBarometer(data) {
+  const ok = Number(data.baro_ok ?? 0) === 1;
+  const pressurePa = Number(data.baro_pressure_pa);
+  const pressureHpa = Number.isFinite(Number(data.baro_pressure_hpa)) ? Number(data.baro_pressure_hpa) : pressurePa / 100.0;
+  const altitude = Number(data.baro_altitude_m);
+  const relativeAltitude = Number(data.baro_relative_altitude_m);
+  const temperature = Number(data.baro_temperature_c);
+  const status = fmt(data.baro_status || (ok ? "OK" : "NOT_STARTED"));
+
+  qs("baroRelativeAltitude").textContent = Number.isFinite(relativeAltitude) ? fixed(relativeAltitude, 2) : "--";
+  qs("baroPressure").textContent = Number.isFinite(pressureHpa) && pressureHpa > 0 ? fixed(pressureHpa, 1) : "--";
+  qs("baroStatus").textContent = ok ? `OK, ${fixed(temperature, 1)} C` : status;
+  qs("baroAltitudeValue").textContent = `${fixed(altitude, 2)} m`;
+  qs("baroRelativeValue").textContent = `${fixed(relativeAltitude, 2)} m`;
+  qs("baroPressureValue").textContent = `${Number.isFinite(pressureHpa) ? fixed(pressureHpa, 1) : "0.0"} hPa`;
+  qs("baroTemperatureValue").textContent = `${fixed(temperature, 1)} C`;
+  qs("baroSystemStatusValue").textContent = status;
+
+  const card = qs("barometerCard");
+  if (card) card.classList.toggle("sensor-warning", !ok);
+}
+
 function showBatteryAlert(data) {
   const names = ["OK", "LOW", "CRITICAL", "EMERGENCY"];
   const banner = qs("alertBanner");
@@ -685,6 +731,7 @@ function updateTelemetry(data) {
   qs("gyroRollRate").textContent = `${fixed(data.gyro_roll_rate, 1)} deg/s`;
   qs("gyroPitchRate").textContent = `${fixed(data.gyro_pitch_rate, 1)} deg/s`;
   qs("gyroYawRate").textContent = `${fixed(data.gyro_yaw_rate, 1)} deg/s`;
+  updateBarometer(data);
   qs("magXValue").textContent = fmt(data.mag_x, 0);
   qs("magYValue").textContent = fmt(data.mag_y, 0);
   qs("magZValue").textContent = fmt(data.mag_z, 0);
@@ -736,6 +783,7 @@ function updateLiveTelemetryTable(data) {
   const priority = [
     "timestamp", "packet_type", "controller_ms", "state", "mode", "armed", "lockout",
     "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "battery_adc",
+    "baro_ok", "baro_status", "baro_pressure_hpa", "baro_pressure_pa", "baro_temperature_c", "baro_altitude_m", "baro_relative_altitude_m", "baro_raw_pressure", "baro_baseline_raw",
     "roll", "pitch", "yaw", "heading", "heading_setpoint", "heading_error", "heading_lock",
     "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "roll_cmd", "pitch_cmd", "yaw_cmd",
     "pid_roll", "pid_pitch", "pid_yaw", "pid_roll_p", "pid_roll_i", "pid_roll_d",
@@ -868,6 +916,7 @@ function updateSystemState(data) {
   qs("gyroCalValue").textContent = fmt(data.gyro_calibrated, 0);
   qs("compassStatusValue").textContent = fmt(data.compass_status);
   qs("compassDriverValue").textContent = fmt(data.compass_driver);
+  qs("baroSystemStatusValue").textContent = fmt(data.baro_status);
   qs("eepromValue").textContent = fmt(data.eeprom);
   qs("ledValue").textContent = fmt(data.led);
   qs("lockoutValue").textContent = fmt(data.lockout, 0);
@@ -876,9 +925,21 @@ function updateSystemState(data) {
 function updatePidFromTelemetry(data) {
   if (data.pid_roll_p !== undefined && !pidEdit) {
     pidValues = {
-      kp: Number.isFinite(Number(data.pid_roll_p)) ? Number(data.pid_roll_p) : pidValues.kp,
-      ki: Number.isFinite(Number(data.pid_roll_i)) ? Number(data.pid_roll_i) : pidValues.ki,
-      kd: Number.isFinite(Number(data.pid_roll_d)) ? Number(data.pid_roll_d) : pidValues.kd,
+      roll: {
+        kp: Number.isFinite(Number(data.pid_roll_p)) ? Number(data.pid_roll_p) : pidValues.roll.kp,
+        ki: Number.isFinite(Number(data.pid_roll_i)) ? Number(data.pid_roll_i) : pidValues.roll.ki,
+        kd: Number.isFinite(Number(data.pid_roll_d)) ? Number(data.pid_roll_d) : pidValues.roll.kd,
+      },
+      pitch: {
+        kp: Number.isFinite(Number(data.pid_pitch_p)) ? Number(data.pid_pitch_p) : pidValues.pitch.kp,
+        ki: Number.isFinite(Number(data.pid_pitch_i)) ? Number(data.pid_pitch_i) : pidValues.pitch.ki,
+        kd: Number.isFinite(Number(data.pid_pitch_d)) ? Number(data.pid_pitch_d) : pidValues.pitch.kd,
+      },
+      yaw: {
+        kp: Number.isFinite(Number(data.pid_yaw_p)) ? Number(data.pid_yaw_p) : pidValues.yaw.kp,
+        ki: Number.isFinite(Number(data.pid_yaw_i)) ? Number(data.pid_yaw_i) : pidValues.yaw.ki,
+        kd: Number.isFinite(Number(data.pid_yaw_d)) ? Number(data.pid_yaw_d) : pidValues.yaw.kd,
+      },
     };
     renderPidGrid();
   }
@@ -918,10 +979,24 @@ async function refreshAnalysis() {
 }
 
 function renderPidGrid() {
-  const rows = [["Roll", "kp", "ki", "kd"], ["Pitch", "kp", "ki", "kd"], ["Yaw", "kp", "ki", "kd"]];
+  const rows = [["Roll", "roll"], ["Pitch", "pitch"], ["Yaw", "yaw"]];
   qs("pidGrid").innerHTML = `<b></b><b>Kp</b><b>Ki</b><b>Kd</b>` + rows.map(([axis]) => {
-    return `<b>${axis}</b>` + ["kp", "ki", "kd"].map(k => pidEdit ? `<input data-pid="${k}" type="number" step="0.001" value="${pidValues[k].toFixed(3)}">` : `<span>${pidValues[k].toFixed(3)}</span>`).join("");
+    const key = axis.toLowerCase();
+    return `<b>${axis}</b>` + ["kp", "ki", "kd"].map(term => (
+      pidEdit
+        ? `<input data-pid-axis="${key}" data-pid-term="${term}" type="number" step="0.001" value="${pidValues[key][term].toFixed(3)}">`
+        : `<span>${pidValues[key][term].toFixed(3)}</span>`
+    )).join("");
   }).join("");
+}
+
+function pidValuesInRange(values) {
+  return ["roll", "pitch", "yaw"].every(axis => {
+    const item = values[axis] || {};
+    return item.kp >= 0 && item.kp <= 1 &&
+      item.ki >= 0 && item.ki <= 0.5 &&
+      item.kd >= 0 && item.kd <= 0.5;
+  });
 }
 
 async function postJson(url, body) {
@@ -935,9 +1010,11 @@ function setupControls() {
   qs("editPid").onclick = () => { pidEdit = true; togglePidButtons(); renderPidGrid(); };
   qs("cancelPid").onclick = () => { pidEdit = false; togglePidButtons(); renderPidGrid(); };
   qs("sendPid").onclick = async () => {
-    const inputs = [...document.querySelectorAll("[data-pid]")];
-    const values = Object.fromEntries(inputs.slice(0, 3).map(input => [input.dataset.pid, Number(input.value)]));
-    if (!(values.kp >= 0 && values.kp <= 1 && values.ki >= 0 && values.ki <= 0.5 && values.kd >= 0 && values.kd <= 0.5)) {
+    const values = JSON.parse(JSON.stringify(pidValues));
+    [...document.querySelectorAll("[data-pid-axis][data-pid-term]")].forEach(input => {
+      values[input.dataset.pidAxis][input.dataset.pidTerm] = Number(input.value);
+    });
+    if (!pidValuesInRange(values)) {
       qs("pidMessage").textContent = "PID values outside safe range.";
       return;
     }
@@ -948,7 +1025,20 @@ function setupControls() {
     togglePidButtons();
     renderPidGrid();
   };
-  qs("resetPid").onclick = () => { if (confirm("Reset all PID gains to factory defaults? This will send new values to the UAV.")) postJson("/api/pid", { kp: 0.150, ki: 0.010, kd: 0.010 }); };
+  qs("resetPid").onclick = async () => {
+    if (!confirm("Reset all PID gains to factory defaults? This will send new values to the UAV.")) return;
+    const defaults = {
+      roll: { kp: 0.180, ki: 0.010, kd: 0.000 },
+      pitch: { kp: 0.200, ki: 0.030, kd: 0.050 },
+      yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
+    };
+    await postJson("/api/pid", defaults);
+    pidValues = defaults;
+    pidEdit = false;
+    qs("pidMessage").textContent = "Factory defaults sent";
+    togglePidButtons();
+    renderPidGrid();
+  };
   qs("killButton").onclick = () => {
     if (!rmsKillEnabled) return;
     qs("confirmKill").showModal();

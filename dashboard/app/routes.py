@@ -145,13 +145,28 @@ def kill():
 @role_required("admin", "operator")
 def pid():
     data = request.get_json(force=True)
-    values = {key: float(data[key]) for key in ("kp", "ki", "kd")}
-    if not (0 <= values["kp"] <= 1 and 0 <= values["ki"] <= 0.5 and 0 <= values["kd"] <= 0.5):
-        return {"error": "range"}, 400
-    command = f"PID:KPR={values['kp']:.3f},KIR={values['ki']:.3f},KDR={values['kd']:.3f}\n"
+    axes = ("roll", "pitch", "yaw")
+    if all(axis in data for axis in axes):
+        values = {
+            axis: {key: float(data[axis][key]) for key in ("kp", "ki", "kd")}
+            for axis in axes
+        }
+    else:
+        legacy = {key: float(data[key]) for key in ("kp", "ki", "kd")}
+        values = {axis: dict(legacy) for axis in axes}
+
+    for axis_values in values.values():
+        if not (0 <= axis_values["kp"] <= 1 and 0 <= axis_values["ki"] <= 0.5 and 0 <= axis_values["kd"] <= 0.5):
+            return {"error": "range"}, 400
+
+    command = (
+        f"PID:KPR={values['roll']['kp']:.3f},KIR={values['roll']['ki']:.4f},KDR={values['roll']['kd']:.3f},"
+        f"KPP={values['pitch']['kp']:.3f},KIP={values['pitch']['ki']:.4f},KDP={values['pitch']['kd']:.3f},"
+        f"KPY={values['yaw']['kp']:.3f},KIY={values['yaw']['ki']:.4f},KDY={values['yaw']['kd']:.3f}\n"
+    )
     serial_worker.send(command)
-    audit(current_app.config["DATABASE"], session["username"], "PID_CHANGE", values, request.remote_addr)
-    return {"ok": True}
+    audit(current_app.config["DATABASE"], session["username"], "PID_CHANGE", {**values, "command": command.strip()}, request.remote_addr)
+    return {"ok": True, "values": values, "command": command.strip()}
 
 
 @main_bp.route("/api/users", methods=["POST"])
@@ -324,7 +339,7 @@ def export_pdf_route():
     summary = telemetry_summary(current_app.config["DATABASE"], time.time() - 1800, None)
     pdf.drawString(72, 700, f"Samples: {summary['count']}  Duration: {summary['duration_s']:.1f}s  Rate: {summary['sample_rate_hz']:.2f}Hz")
     y = 676
-    for field in ("roll", "pitch", "yaw", "gyro_yaw_rate", "heading_error", "m1", "m2", "m3", "m4"):
+    for field in ("roll", "pitch", "yaw", "gyro_yaw_rate", "heading_error", "baro_relative_altitude_m", "baro_pressure_hpa", "baro_temperature_c", "m1", "m2", "m3", "m4"):
         stats = summary["numeric"].get(field)
         if not stats:
             continue

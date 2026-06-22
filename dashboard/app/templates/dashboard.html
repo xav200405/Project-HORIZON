@@ -88,6 +88,12 @@
       <div id="batteryStatus" class="metric-note">A0 waiting</div>
       <div class="soc-row"><span id="batterySoc">0%</span><div class="soc-track"><div id="socFill"></div></div></div>
     </section>
+    <section class="metric-card data-view" id="barometerCard">
+      <h2>Barometer</h2>
+      <div class="metric-large"><span id="baroRelativeAltitude">--</span> m</div>
+      <div><span id="baroPressure">--</span> hPa</div>
+      <div id="baroStatus" class="metric-note">Not started</div>
+    </section>
     <section class="metric-card data-view">
       <h2>Heading</h2>
       <div class="compass"><div id="compassNeedle"></div></div>
@@ -156,6 +162,10 @@
         <dt>Gyro roll</dt><dd id="gyroRollRate">0.0 deg/s</dd>
         <dt>Gyro pitch</dt><dd id="gyroPitchRate">0.0 deg/s</dd>
         <dt>Gyro yaw</dt><dd id="gyroYawRate">0.0 deg/s</dd>
+        <dt>Baro altitude</dt><dd id="baroAltitudeValue">0.00 m</dd>
+        <dt>Baro relative</dt><dd id="baroRelativeValue">0.00 m</dd>
+        <dt>Baro pressure</dt><dd id="baroPressureValue">0.0 hPa</dd>
+        <dt>Baro temp</dt><dd id="baroTemperatureValue">0.0 C</dd>
         <dt>Mag X</dt><dd id="magXValue">0</dd>
         <dt>Mag Y</dt><dd id="magYValue">0</dd>
         <dt>Mag Z</dt><dd id="magZValue">0</dd>
@@ -174,6 +184,7 @@
         <dt>Gyro cal</dt><dd id="gyroCalValue">0</dd>
         <dt>Compass</dt><dd id="compassStatusValue">NOT_STARTED</dd>
         <dt>Driver</dt><dd id="compassDriverValue">NONE</dd>
+        <dt>Barometer</dt><dd id="baroSystemStatusValue">NOT_STARTED</dd>
         <dt>EEPROM</dt><dd id="eepromValue">-</dd>
         <dt>LED</dt><dd id="ledValue">NOT_READY</dd>
         <dt>Lockout</dt><dd id="lockoutValue">0</dd>
@@ -284,7 +295,7 @@
   </main>
 
   <footer class="footer">
-    <span>TP-ARC 2026.06-rev01.16</span>
+    <span>TP-ARC 2026.06-rev01.18</span>
     <span>TLS <b id="tlsStatus">active</b></span>
     <span>Role {{ user.role }}</span>
     <span id="sessionCountdown">30:00</span>

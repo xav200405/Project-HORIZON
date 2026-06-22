@@ -108,7 +108,9 @@ class SerialWorker:
         telemetry_fields = {
             "roll", "pitch", "yaw", "heading", "controller_ms", "state", "mode",
             "armed", "m1", "m2", "m3", "m4", "battery_soc", "battery_voltage",
-            "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate",
+            "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "baro_ok",
+            "baro_pressure_pa", "baro_altitude_m", "baro_relative_altitude_m",
+            "baro_temperature_c",
         }
         if telemetry_fields.intersection(parsed):
             self.latest_state.update(parsed)

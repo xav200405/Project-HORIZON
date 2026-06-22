@@ -129,6 +129,9 @@ h2 { font-size: 15px; }
 .battery-warning {
   background: #fffaf0;
 }
+.sensor-warning {
+  background: #fffaf0;
+}
 .compass, .horizon { width: 92px; height: 92px; border: 1px solid var(--line); border-radius: 50%; margin-bottom: 8px; position: relative; overflow: hidden; }
 #compassNeedle { width: 4px; height: 42px; background: var(--red); position: absolute; left: 43px; top: 6px; transform-origin: 50% 40px; }
 #horizonLine { height: 46px; background: #6aa6d9; border-bottom: 3px solid #6f4e37; transform-origin: 50% 100%; }

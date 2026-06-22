@@ -147,6 +147,9 @@ Current deployment defaults:
 - `BATTERY_MONITOR_ENABLED = true` for the verified A0 stepped-down monitor
   signal. Firmware treats 5.00V on A0 as 100% and emits monitor voltage,
   battery percentage, alarm level, and validity in JSON telemetry.
+- BMP280/BME280 barometer telemetry is active at I2C address `0x76`. Firmware
+  emits pressure, temperature, absolute altitude estimate, and relative altitude
+  for RMS monitoring only; altitude hold is not enabled.
 - `COMPASS_REQUIRED_TO_ARM = false`, so missing compass data falls back to
   yaw-rate command mode instead of silently blocking all arming.
 - The physical CH6 transmitter kill switch is the active bring-up kill path.
@@ -170,10 +173,10 @@ tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.ya
 
 Last local verification:
 
-- Flight controller `controller_firmware_v2.6.1.ino`: `24878` bytes flash,
-  `929` bytes RAM.
-- Calibration wizard `CalibrationWizard.ino`: `23242` bytes flash,
-  `647` bytes RAM.
+- Flight controller `controller_firmware_v2.6.1.ino`: `30884` bytes flash,
+  `1136` bytes RAM.
+- Calibration wizard `CalibrationWizard.ino`: `22172` bytes flash,
+  `595` bytes RAM.
 
 ## Documentation
 

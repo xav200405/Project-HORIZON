@@ -12,6 +12,7 @@
       * Basic MPU6050 roll/pitch self-level stabilization
       * Basic yaw-rate damping
       * Compass readout and optional heading hold
+      * BMP280/BME280 barometer telemetry
       * PID logic
       * Motor mixing for latest motor layout
       * EEPROM calibration loading from ARC Setup Module v6.5 with safe defaults
@@ -23,7 +24,7 @@
   IMPORTANT SAFETY NOTES:
   - Test with props removed first.
   - This is a baseline stabilizer, not a final flight tune.
-  - Barometer altitude hold is intentionally not included here.
+  - Barometer sensing is active for telemetry only. Barometer altitude hold is intentionally not included here.
   - If the UAV corrects in the wrong direction, stop immediately and flip the relevant sign
     constants in the CONFIGURABLE AXIS/MIXER SIGNS section.
   - If the compass fails, the controller does NOT cut motors and does NOT disarm.
@@ -67,8 +68,8 @@
 
 #define STATUS_LED_PIN 13
 
-#define FIRMWARE_VERSION "FC-0.8.3"
-#define FIRMWARE_REVISION "2026-06-22.2"
+#define FIRMWARE_VERSION "FC-0.8.5"
+#define FIRMWARE_REVISION "2026-06-22.4"
 
 #define ESC1_PIN 6
 #define ESC2_PIN 9
@@ -90,6 +91,7 @@
 
 #define MPU6050_ADDR 0x68
 #define COMPASS_ADDR 0x2C      // Project fixed compass address from setup sketch.
+#define BMP280_ADDR 0x76
 #define I2C_SPEED 400000L
 
 #define ESC_MIN_US 1000
@@ -122,6 +124,9 @@
 #define HEADING_LOCK_DELAY_MS 100UL     // Yaw stick centered time before heading locks
 #define COMPASS_UPDATE_INTERVAL_MS 50UL  // 20 Hz compass update, lower I2C load than 250 Hz
 #define COMPASS_RETRY_INTERVAL_MS 500UL // Retry compass init every 1s if it fails
+#define BARO_UPDATE_INTERVAL_MS 100UL    // 10 Hz barometer telemetry refresh.
+#define BARO_RETRY_INTERVAL_MS 1000UL    // Retry barometer init if it is missing at boot.
+#define BARO_SEA_LEVEL_HPA 1013.25f      // Used only for absolute estimated altitude display.
 #define MAX_PID_OUTPUT 250.0f
 #define MAX_YAW_OUTPUT 50.0f
 
@@ -294,6 +299,8 @@ uint32_t loop_timer = 0;
 uint32_t ledTimer = 0;
 uint32_t telemetryTimer = 0;
 uint32_t batteryTimer = 0;
+uint32_t baroTimer = 0;
+uint32_t lastBaroRetryMs = 0;
 uint32_t armStartMs = 0;
 uint32_t disarmStartMs = 0;
 
@@ -336,6 +343,61 @@ float batteryLowThreshold = BATTERY_DEFAULT_LOW_PERCENT;
 float batteryCriticalThreshold = BATTERY_DEFAULT_CRITICAL_PERCENT;
 float batteryEmergencyThreshold = BATTERY_DEFAULT_EMERGENCY_PERCENT;
 bool batteryFilterReady = false;
+
+// ================================================================
+// BAROMETER STATE
+// ================================================================
+
+enum BaroStatus {
+  BARO_NOT_STARTED = 0,
+  BARO_OK = 1,
+  BARO_NOT_FOUND = 2,
+  BARO_BAD_ID = 3,
+  BARO_INIT_FAIL = 4,
+  BARO_READ_FAIL = 5
+};
+
+struct BarometerState {
+  bool initialized;
+  bool ok;
+  uint8_t chipId;
+  BaroStatus status;
+  int32_t rawPressure;
+  int32_t rawTemperature;
+  float pressurePa;
+  float temperatureC;
+  float altitudeM;
+  float relativeAltitudeM;
+  float baselinePressurePa;
+};
+
+BarometerState baro = {
+  false,
+  false,
+  0,
+  BARO_NOT_STARTED,
+  0,
+  0,
+  0.0f,
+  0.0f,
+  0.0f,
+  0.0f,
+  0.0f
+};
+
+uint16_t bmpDigT1 = 0;
+int16_t bmpDigT2 = 0;
+int16_t bmpDigT3 = 0;
+uint16_t bmpDigP1 = 0;
+int16_t bmpDigP2 = 0;
+int16_t bmpDigP3 = 0;
+int16_t bmpDigP4 = 0;
+int16_t bmpDigP5 = 0;
+int16_t bmpDigP6 = 0;
+int16_t bmpDigP7 = 0;
+int16_t bmpDigP8 = 0;
+int16_t bmpDigP9 = 0;
+int32_t bmpTFine = 0;
 
 // ================================================================
 // IMU / PID STATE
@@ -839,6 +901,213 @@ void copyAndCalibrateReceiver() {
     }
 
     ch[i] = calibrateReceiverPulse(i, raw[i]);
+  }
+}
+
+// ================================================================
+// BMP280 / BME280 BAROMETER TELEMETRY MODULE
+// ================================================================
+
+bool writeI2CRegister(byte address, byte reg, byte data) {
+  Wire.beginTransmission(address);
+  Wire.write(reg);
+  Wire.write(data);
+  return Wire.endTransmission() == 0;
+}
+
+bool readI2CRegisters(byte address, byte reg, byte count, uint8_t *buffer) {
+  Wire.beginTransmission(address);
+  Wire.write(reg);
+
+  if (Wire.endTransmission(false) != 0) {
+    return false;
+  }
+
+  uint8_t n = Wire.requestFrom((uint8_t)address, (uint8_t)count, (uint8_t)true);
+  if (n != count) {
+    return false;
+  }
+
+  for (byte i = 0; i < count; i++) {
+    buffer[i] = Wire.read();
+  }
+
+  return true;
+}
+
+uint16_t u16le(const uint8_t *b, byte index) {
+  return (uint16_t)b[index] | ((uint16_t)b[index + 1] << 8);
+}
+
+int16_t s16le(const uint8_t *b, byte index) {
+  return (int16_t)u16le(b, index);
+}
+
+bool readBMP280Calibration() {
+  uint8_t b[24];
+  if (!readI2CRegisters(BMP280_ADDR, 0x88, 24, b)) return false;
+
+  bmpDigT1 = u16le(b, 0);
+  bmpDigT2 = s16le(b, 2);
+  bmpDigT3 = s16le(b, 4);
+  bmpDigP1 = u16le(b, 6);
+  bmpDigP2 = s16le(b, 8);
+  bmpDigP3 = s16le(b, 10);
+  bmpDigP4 = s16le(b, 12);
+  bmpDigP5 = s16le(b, 14);
+  bmpDigP6 = s16le(b, 16);
+  bmpDigP7 = s16le(b, 18);
+  bmpDigP8 = s16le(b, 20);
+  bmpDigP9 = s16le(b, 22);
+
+  return bmpDigT1 != 0 && bmpDigP1 != 0;
+}
+
+float compensateTemperatureC(int32_t adcT) {
+  float var1 = (((float)adcT) / 16384.0f - ((float)bmpDigT1) / 1024.0f) * ((float)bmpDigT2);
+  float var2 = ((((float)adcT) / 131072.0f - ((float)bmpDigT1) / 8192.0f) *
+                (((float)adcT) / 131072.0f - ((float)bmpDigT1) / 8192.0f)) * ((float)bmpDigT3);
+  bmpTFine = (int32_t)(var1 + var2);
+  return (var1 + var2) / 5120.0f;
+}
+
+float compensatePressurePa(int32_t adcP) {
+  float var1 = ((float)bmpTFine / 2.0f) - 64000.0f;
+  float var2 = var1 * var1 * ((float)bmpDigP6) / 32768.0f;
+  var2 = var2 + var1 * ((float)bmpDigP5) * 2.0f;
+  var2 = (var2 / 4.0f) + (((float)bmpDigP4) * 65536.0f);
+  var1 = (((float)bmpDigP3) * var1 * var1 / 524288.0f + ((float)bmpDigP2) * var1) / 524288.0f;
+  var1 = (1.0f + var1 / 32768.0f) * ((float)bmpDigP1);
+
+  if (var1 == 0.0f) return 0.0f;
+
+  float pressure = 1048576.0f - (float)adcP;
+  pressure = (pressure - (var2 / 4096.0f)) * 6250.0f / var1;
+  var1 = ((float)bmpDigP9) * pressure * pressure / 2147483648.0f;
+  var2 = pressure * ((float)bmpDigP8) / 32768.0f;
+  pressure = pressure + (var1 + var2 + ((float)bmpDigP7)) / 16.0f;
+  return pressure;
+}
+
+float altitudeFromPressure(float pressurePa, float referencePa) {
+  if (pressurePa <= 0.0f || referencePa <= 0.0f) return 0.0f;
+  return 44330.0f * (1.0f - pow(pressurePa / referencePa, 0.19029495f));
+}
+
+bool setupBarometer() {
+  uint8_t chipId = 0;
+  if (!readI2CRegisters(BMP280_ADDR, 0xD0, 1, &chipId)) {
+    baro.initialized = false;
+    baro.ok = false;
+    baro.chipId = 0;
+    baro.status = BARO_NOT_FOUND;
+    return false;
+  }
+
+  baro.chipId = chipId;
+
+  if (chipId != 0x58 && chipId != 0x60) {
+    baro.initialized = false;
+    baro.ok = false;
+    baro.status = BARO_BAD_ID;
+    return false;
+  }
+
+  if (!readBMP280Calibration()) {
+    baro.initialized = false;
+    baro.ok = false;
+    baro.status = BARO_INIT_FAIL;
+    return false;
+  }
+
+  bool ok = true;
+  ok &= writeI2CRegister(BMP280_ADDR, 0xF5, 0xA0); // 1000 ms standby, filter off.
+  ok &= writeI2CRegister(BMP280_ADDR, 0xF4, 0x27); // Temp x1, pressure x1, normal mode.
+  delay(120);
+
+  if (!ok) {
+    baro.initialized = false;
+    baro.ok = false;
+    baro.status = BARO_INIT_FAIL;
+    return false;
+  }
+
+  baro.initialized = true;
+  baro.ok = false;
+  baro.status = BARO_NOT_STARTED;
+  return true;
+}
+
+bool readBarometerSample() {
+  uint8_t b[6];
+  if (!readI2CRegisters(BMP280_ADDR, 0xF7, 6, b)) {
+    baro.ok = false;
+    baro.status = BARO_READ_FAIL;
+    return false;
+  }
+
+  int32_t rawP = (((int32_t)b[0]) << 12) | (((int32_t)b[1]) << 4) | (((int32_t)b[2]) >> 4);
+  int32_t rawT = (((int32_t)b[3]) << 12) | (((int32_t)b[4]) << 4) | (((int32_t)b[5]) >> 4);
+
+  baro.rawPressure = rawP;
+  baro.rawTemperature = rawT;
+  baro.temperatureC = compensateTemperatureC(rawT);
+  baro.pressurePa = compensatePressurePa(rawP);
+  baro.altitudeM = altitudeFromPressure(baro.pressurePa, BARO_SEA_LEVEL_HPA * 100.0f);
+
+  if (baro.baselinePressurePa <= 0.0f) {
+    baro.baselinePressurePa = baro.pressurePa;
+  }
+
+  baro.relativeAltitudeM = altitudeFromPressure(baro.pressurePa, baro.baselinePressurePa);
+  baro.ok = baro.pressurePa > 30000.0f && baro.pressurePa < 120000.0f;
+  baro.status = baro.ok ? BARO_OK : BARO_READ_FAIL;
+  return baro.ok;
+}
+
+void updateBarometer() {
+  uint32_t now = millis();
+
+  if (!baro.initialized) {
+    if ((uint32_t)(now - lastBaroRetryMs) < BARO_RETRY_INTERVAL_MS) {
+      return;
+    }
+
+    lastBaroRetryMs = now;
+    if (!setupBarometer()) {
+      return;
+    }
+  }
+
+  if ((uint32_t)(now - baroTimer) < BARO_UPDATE_INTERVAL_MS) {
+    return;
+  }
+
+  baroTimer = now;
+  readBarometerSample();
+}
+
+void printBaroStatusJsonValue() {
+  switch (baro.status) {
+    case BARO_OK:
+      Serial.print(F("OK"));
+      break;
+    case BARO_NOT_FOUND:
+      Serial.print(F("NOT_FOUND"));
+      break;
+    case BARO_BAD_ID:
+      Serial.print(F("BAD_ID"));
+      break;
+    case BARO_INIT_FAIL:
+      Serial.print(F("INIT_FAIL"));
+      break;
+    case BARO_READ_FAIL:
+      Serial.print(F("READ_FAIL"));
+      break;
+    case BARO_NOT_STARTED:
+    default:
+      Serial.print(F("NOT_STARTED"));
+      break;
   }
 }
 
@@ -1404,6 +1673,93 @@ void handleBatteryCommand(const char *command) {
   Serial.println(batteryEmergencyThreshold, 2);
 }
 
+bool pidCommandValuesValid(float kp, float ki, float kd) {
+  return kp >= 0.0f && kp <= 1.0f &&
+         ki >= 0.0f && ki <= 0.5f &&
+         kd >= 0.0f && kd <= 0.5f;
+}
+
+void handlePidCommand(const char *command) {
+  if (strncmp(command, "PID:", 4) != 0) return;
+
+  float kpr = pid_p_gain_roll;
+  float kir = pid_i_gain_roll;
+  float kdr = pid_d_gain_roll;
+  float kpp = pid_p_gain_pitch;
+  float kip = pid_i_gain_pitch;
+  float kdp = pid_d_gain_pitch;
+  float kpy = pid_p_gain_yaw;
+  float kiy = pid_i_gain_yaw;
+  float kdy = pid_d_gain_yaw;
+
+  bool hasRollP = readCommandFloat(command, "KPR=", kpr);
+  bool hasRollI = readCommandFloat(command, "KIR=", kir);
+  bool hasRollD = readCommandFloat(command, "KDR=", kdr);
+  bool hasPitchP = readCommandFloat(command, "KPP=", kpp);
+  bool hasPitchI = readCommandFloat(command, "KIP=", kip);
+  bool hasPitchD = readCommandFloat(command, "KDP=", kdp);
+  bool hasYawP = readCommandFloat(command, "KPY=", kpy);
+  bool hasYawI = readCommandFloat(command, "KIY=", kiy);
+  bool hasYawD = readCommandFloat(command, "KDY=", kdy);
+
+  if (!hasRollP && !hasRollI && !hasRollD &&
+      !hasPitchP && !hasPitchI && !hasPitchD &&
+      !hasYawP && !hasYawI && !hasYawD) {
+    Serial.println(F("ERR:PID_COMMAND_EMPTY"));
+    return;
+  }
+
+  // Backwards compatibility: old dashboard command only sent roll KPR/KIR/KDR.
+  if ((hasRollP || hasRollI || hasRollD) &&
+      !hasPitchP && !hasPitchI && !hasPitchD &&
+      !hasYawP && !hasYawI && !hasYawD) {
+    kpp = kpr;
+    kip = kir;
+    kdp = kdr;
+    kpy = kpr;
+    kiy = kir;
+    kdy = kdr;
+  }
+
+  if (!pidCommandValuesValid(kpr, kir, kdr) ||
+      !pidCommandValuesValid(kpp, kip, kdp) ||
+      !pidCommandValuesValid(kpy, kiy, kdy)) {
+    Serial.println(F("ERR:PID_RANGE"));
+    return;
+  }
+
+  pid_p_gain_roll = kpr;
+  pid_i_gain_roll = kir;
+  pid_d_gain_roll = kdr;
+  pid_p_gain_pitch = kpp;
+  pid_i_gain_pitch = kip;
+  pid_d_gain_pitch = kdp;
+  pid_p_gain_yaw = kpy;
+  pid_i_gain_yaw = kiy;
+  pid_d_gain_yaw = kdy;
+
+  resetPID();
+
+  Serial.print(F("ACK:PID,KPR="));
+  Serial.print(pid_p_gain_roll, 3);
+  Serial.print(F(",KIR="));
+  Serial.print(pid_i_gain_roll, 4);
+  Serial.print(F(",KDR="));
+  Serial.print(pid_d_gain_roll, 3);
+  Serial.print(F(",KPP="));
+  Serial.print(pid_p_gain_pitch, 3);
+  Serial.print(F(",KIP="));
+  Serial.print(pid_i_gain_pitch, 4);
+  Serial.print(F(",KDP="));
+  Serial.print(pid_d_gain_pitch, 3);
+  Serial.print(F(",KPY="));
+  Serial.print(pid_p_gain_yaw, 3);
+  Serial.print(F(",KIY="));
+  Serial.print(pid_i_gain_yaw, 4);
+  Serial.print(F(",KDY="));
+  Serial.println(pid_d_gain_yaw, 3);
+}
+
 // ================================================================
 // SAFETY / ARMING / MODE LOGIC
 // ================================================================
@@ -1959,6 +2315,30 @@ void printTelemetryJson() {
   Serial.print(F(",\"compassFlatlineCount\":"));
   Serial.print(compassFlatlineCount);
 
+  Serial.print(F(",\"baroOK\":"));
+  Serial.print(baro.ok ? 1 : 0);
+  Serial.print(F(",\"baroStatus\":\""));
+  printBaroStatusJsonValue();
+  Serial.print(F("\""));
+  Serial.print(F(",\"baroChipId\":"));
+  Serial.print(baro.chipId);
+  Serial.print(F(",\"baroPressurePa\":"));
+  Serial.print(baro.pressurePa, 1);
+  Serial.print(F(",\"baroTempC\":"));
+  Serial.print(baro.temperatureC, 2);
+  Serial.print(F(",\"baroAltitudeM\":"));
+  Serial.print(baro.altitudeM, 2);
+  Serial.print(F(",\"baroRelativeAltitudeM\":"));
+  Serial.print(baro.relativeAltitudeM, 2);
+  Serial.print(F(",\"baroRawPressure\":"));
+  Serial.print(baro.rawPressure);
+  Serial.print(F(",\"baroRawTemperature\":"));
+  Serial.print(baro.rawTemperature);
+  Serial.print(F(",\"baroBaselineRaw\":"));
+  Serial.print(cal.baroBaselineRaw);
+  Serial.print(F(",\"baroBaselinePressurePa\":"));
+  Serial.print(baro.baselinePressurePa, 1);
+
   Serial.print(F(",\"roll\":"));
   Serial.print(angle_roll, 1);
 
@@ -2133,7 +2513,7 @@ void printGains() {
 */
 void handleSerialTuning() {
   static char pending = 0;
-  static char commandBuffer[72];
+  static char commandBuffer[160];
   static byte commandLen = 0;
   static bool collectingCommand = false;
 
@@ -2148,6 +2528,7 @@ void handleSerialTuning() {
       if (c == '\n') {
         commandBuffer[commandLen] = '\0';
         handleBatteryCommand(commandBuffer);
+        handlePidCommand(commandBuffer);
         commandLen = 0;
         collectingCommand = false;
         continue;
@@ -2164,7 +2545,7 @@ void handleSerialTuning() {
       continue;
     }
 
-    if (c == 'B') {
+    if (c == 'B' || c == 'P') {
       commandLen = 0;
       commandBuffer[commandLen++] = c;
       collectingCommand = true;
@@ -2253,6 +2634,14 @@ void setup() {
     Serial.println(F("Compass OK at 0x2C. Heading hold available when yaw stick is centered."));
   }
 
+  // Barometer is optional / telemetry-only. It does not block arming or control.
+  if (!setupBarometer()) {
+    Serial.println(F("WARNING: BMP280/BME280 init failed at 0x76. Continuing without barometer telemetry."));
+  } else {
+    Serial.println(F("Barometer OK at 0x76. Pressure and relative altitude telemetry active."));
+    updateBarometer();
+  }
+
   forceMotorsOff();
   writeEscPulses();
   updateBatteryMonitor();
@@ -2276,6 +2665,7 @@ void loop() {
   }
 
   updateCompass();
+  updateBarometer();
 
   check_safety_and_arming();
 

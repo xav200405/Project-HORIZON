@@ -12,7 +12,7 @@ For a full start-to-finish walkthrough, read
 
 ## What You Get
 
-- Client-presentable Overview page with key health values, graphs, analysis, and organized telemetry fields.
+- Client-presentable Overview page with key health values, battery/barometer cards, graphs, analysis, and organized telemetry fields.
 - Live Telemetry page with charts, controls, raw values, and every current telemetry field.
 - Network page showing serial link health, packet rate, browser/socket status, packet age, and raw serial lines.
 - Telemetry recording to SQLite.

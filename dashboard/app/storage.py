@@ -174,6 +174,12 @@ def telemetry_summary(db_path, start_ts=None, end_ts=None):
         "battery_soc",
         "battery_voltage",
         "battery_monitor_voltage",
+        "baro_pressure_pa",
+        "baro_pressure_hpa",
+        "baro_temperature_c",
+        "baro_altitude_m",
+        "baro_relative_altitude_m",
+        "baro_baseline_pressure_pa",
     ]
     numeric = {}
     for field in numeric_fields:

@@ -80,6 +80,8 @@ def main():
         ("flight has serial telemetry", r"telemetry", re.I),
         ("flight has QMC5883P compass support", r"QMC5883P"),
         ("flight has MPU6050 support", r"MPU6050"),
+        ("flight has BMP280 telemetry support", r"setupBarometer|BARO_UPDATE_INTERVAL_MS"),
+        ("flight emits barometer telemetry", r"baroPressurePa.*baroRelativeAltitudeM", re.S),
     ]
     for item in flight_checks:
         name, pattern, *flags = item
@@ -109,11 +111,14 @@ def main():
         ("WebSocket telemetry", r"socket\.on\(\"telemetry\""),
         ("telemetry chart renderer", r"new\s+(TelemetryChart|Chart)"),
         ("series toggles", r"enabledSeries"),
+        ("barometer chart tab", r"Barometer:"),
+        ("barometer RMS display", r"function updateBarometer"),
         ("chart auto-selects populated telemetry tab", r"function bestTelemetryTab"),
         ("chart distinguishes empty tab from no telemetry", r"Telemetry received; no .* samples in this window"),
         ("API fallback allows changed stable-timestamp telemetry", r"lastFallbackSignature"),
         ("downsampling", r"function downsample"),
-        ("PID range validation", r"kp >= 0.*kp <= 1.*ki >= 0.*ki <= 0\.5.*kd >= 0.*kd <= 0\.5", re.S),
+        ("PID range validation", r"item\.kp >= 0.*item\.kp <= 1.*item\.ki >= 0.*item\.ki <= 0\.5.*item\.kd >= 0.*item\.kd <= 0\.5", re.S),
+        ("PID UI sends axis-specific gains", r"data-pid-axis"),
         ("kill confirmation dialog", r"confirmKill"),
         ("RMS kill UI disabled state", r"RMS kill not commissioned"),
         ("viewer RBAC controls", r"role === \"viewer\""),
@@ -127,6 +132,7 @@ def main():
 
     dashboard_text = "\n".join(read(path) for path in DASH.rglob("*") if path.is_file() and path.suffix in {".py", ".html", ".js"})
     dashboard_project_checks = [
+        ("PID route sends full axis command", r"KPR=.*KIR=.*KDR=.*KPP=.*KIP=.*KDP=.*KPY=.*KIY=.*KDY=", re.S),
         ("RMS kill disabled by default", r"RMS_KILL_ENABLED=os\.environ\.get\(\"TPARC_RMS_KILL_ENABLED\"\)\s*==\s*\"1\""),
         ("RMS kill route guarded", r"if not current_app\.config\[\"RMS_KILL_ENABLED\"\].*RMS_KILL_DISABLED", re.S),
         ("RMS kill disabled template text", r"RMS kill is disabled; use transmitter CH6"),
@@ -134,6 +140,8 @@ def main():
     for item in dashboard_project_checks:
         name, pattern, *flags = item
         ok &= check(name, require(pattern, dashboard_text, flags[0] if flags else 0))
+
+    ok &= check("flight handles full PID command", require(r"void handlePidCommand", flight) and require(r"ACK:PID,KPR=", flight))
 
     for py_file in py_files:
         try:
@@ -155,6 +163,14 @@ def main():
     ok &= check("telemetry parser heading mode", parsed["heading_mode"] == "HOLD")
     ok &= check("telemetry parser firmware version", parsed["firmware_version"] == "FC-0.8.1")
     ok &= check("telemetry parser firmware revision", parsed["firmware_revision"] == "2026-06-19.1")
+    parsed_baro = namespace["parse_telemetry_line"](
+        '{"ms":101,"baroOK":1,"baroStatus":"OK","baroPressurePa":100125.5,'
+        '"baroTempC":28.25,"baroAltitudeM":10.2,"baroRelativeAltitudeM":1.4,'
+        '"baroRawPressure":415000,"baroBaselineRaw":414900}'
+    )
+    ok &= check("telemetry parser barometer pressure", parsed_baro["baro_pressure_pa"] == 100125.5)
+    ok &= check("telemetry parser barometer hPa", round(parsed_baro["baro_pressure_hpa"], 3) == 1001.255)
+    ok &= check("telemetry parser barometer status", parsed_baro["baro_status"] == "OK")
     ok &= check("no stale TP_ARC sketch names", "TP_ARC_FlightController" not in all_project_text and "TP_ARC_CalibrationWizard" not in all_project_text)
 
     return 0 if ok else 1

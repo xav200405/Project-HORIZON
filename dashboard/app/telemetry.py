@@ -25,6 +25,11 @@ NUMERIC_FIELDS = {
     "ARM": "armed",
     "FS": "failsafe",
     "ALT": "altitude",
+    "BARO": "baro_altitude_m",
+    "BALT": "baro_relative_altitude_m",
+    "BP": "baro_pressure_pa",
+    "BHP": "baro_pressure_hpa",
+    "BT": "baro_temperature_c",
 }
 
 TEXT_FIELDS = {
@@ -67,6 +72,23 @@ JSON_ALIASES = {
     "compassChipId": "compass_chip_id",
     "compassBadReason": "compass_bad_reason",
     "compassFlatlineCount": "compass_flatline_count",
+    "baroOK": "baro_ok",
+    "baroStatus": "baro_status",
+    "baroChipId": "baro_chip_id",
+    "baroPressurePa": "baro_pressure_pa",
+    "baroPressureHpa": "baro_pressure_hpa",
+    "baroPressureHPa": "baro_pressure_hpa",
+    "baroTempC": "baro_temperature_c",
+    "baroAltitudeM": "baro_altitude_m",
+    "baroRelativeAltitudeM": "baro_relative_altitude_m",
+    "baroRawPressure": "baro_raw_pressure",
+    "baroRawTemperature": "baro_raw_temperature",
+    "baroBaselineRaw": "baro_baseline_raw",
+    "baroBaselinePressurePa": "baro_baseline_pressure_pa",
+    "pressurePa": "baro_pressure_pa",
+    "temperatureC": "baro_temperature_c",
+    "altitudeM": "baro_altitude_m",
+    "relativeAltitudeM": "baro_relative_altitude_m",
     "magX": "mag_x",
     "magY": "mag_y",
     "magZ": "mag_z",
@@ -121,6 +143,7 @@ JSON_TEXT_FIELDS = {
     "eeprom",
     "compass_status",
     "compass_driver",
+    "baro_status",
 }
 
 JSON_INT_FIELDS = {
@@ -142,6 +165,11 @@ JSON_INT_FIELDS = {
     "compass_chip_id",
     "compass_bad_reason",
     "compass_flatline_count",
+    "baro_ok",
+    "baro_chip_id",
+    "baro_raw_pressure",
+    "baro_raw_temperature",
+    "baro_baseline_raw",
     "battery_monitor_enabled",
     "battery_adc",
     "battery_soc",
@@ -211,6 +239,15 @@ def _normalize_battery_payload(payload):
         payload["battery_full_scale_voltage"] = 5.0
 
 
+def _normalize_baro_payload(payload):
+    if "baro_pressure_hpa" not in payload and "baro_pressure_pa" in payload:
+        payload["baro_pressure_hpa"] = _as_float(payload.get("baro_pressure_pa")) / 100.0
+    if "baro_ok" not in payload and "baro_pressure_pa" in payload:
+        payload["baro_ok"] = 1 if _as_float(payload.get("baro_pressure_pa")) > 0.0 else 0
+    if "baro_status" not in payload:
+        payload["baro_status"] = "OK" if payload.get("baro_ok") else "NOT_STARTED"
+
+
 def _parse_json_packet(raw, event):
     try:
         data = json.loads(raw)
@@ -254,6 +291,7 @@ def _parse_json_packet(raw, event):
     if "heading_lock" in payload:
         payload["heading_mode"] = "HOLD" if payload["heading_lock"] else "COMMAND"
     _normalize_battery_payload(payload)
+    _normalize_baro_payload(payload)
     return payload
 
 
@@ -288,6 +326,7 @@ def parse_telemetry_line(line):
             elif key in TEXT_FIELDS:
                 payload[TEXT_FIELDS[key]] = value
         _normalize_battery_payload(payload)
+        _normalize_baro_payload(payload)
         return payload
     if raw.startswith("EVT:"):
         event["event"] = raw[4:]
@@ -336,6 +375,18 @@ def default_state():
         "compass_chip_id": 0,
         "compass_bad_reason": 0,
         "compass_flatline_count": 0,
+        "baro_ok": 0,
+        "baro_status": "NOT_STARTED",
+        "baro_chip_id": 0,
+        "baro_pressure_pa": 0.0,
+        "baro_pressure_hpa": 0.0,
+        "baro_temperature_c": 0.0,
+        "baro_altitude_m": 0.0,
+        "baro_relative_altitude_m": 0.0,
+        "baro_raw_pressure": 0,
+        "baro_raw_temperature": 0,
+        "baro_baseline_raw": 0,
+        "baro_baseline_pressure_pa": 0.0,
         "gyro_roll_rate": 0.0,
         "gyro_pitch_rate": 0.0,
         "gyro_yaw_rate": 0.0,

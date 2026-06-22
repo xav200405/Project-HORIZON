@@ -30,7 +30,7 @@ accounts later only when needed.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.16.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.18.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -145,6 +145,7 @@ Use Telemetry for detailed engineering review:
 - RC input and raw channel values.
 - PID gains and outputs.
 - Sensor fusion.
+- Barometer pressure, temperature, and relative altitude.
 - System state.
 - Raw telemetry.
 - Current fields.
@@ -160,6 +161,16 @@ stepped-down monitor signal. The dashboard treats 5.00V on A0 as 100%.
 It recognizes `battery_voltage`, `battery_monitor_voltage`, `battery_soc`,
 `battery_percent`, `battery_alarm`, `battery_valid`, and
 `battery_monitor_enabled`.
+
+### Barometer Display
+
+The flight controller initializes a BMP280/BME280 barometer at I2C address
+`0x76` for telemetry only. The RMS shows a Barometer card and a Barometer graph
+tab when packets include `baro_ok`, `baro_status`, `baro_pressure_pa`,
+`baro_temperature_c`, `baro_altitude_m`, and `baro_relative_altitude_m`.
+
+Altitude hold is not enabled by this feature. Treat the displayed altitude as a
+monitoring aid until the sensor has been bench-tested in the final enclosure.
 
 If the Battery card says `No signal`:
 

@@ -13,12 +13,12 @@ Aviation Research Centre.
 
 Current flight controller firmware identity:
 
-- Version: `FC-0.8.3`
-- Revision: `2026-06-22.2`
+- Version: `FC-0.8.5`
+- Revision: `2026-06-22.4`
 
 Current RMS package identity:
 
-- Package: `2026.06-rev01.16`
+- Package: `2026.06-rev01.18`
 - Current release folder: `dashboard/v1.5.1/`
 - Retired v1.5 and superseded v1.5.1 package builds are stored under `_archive/`.
 
@@ -26,6 +26,8 @@ Current RMS package identity:
 
 - `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 stepped-down monitor signal.
 - Battery telemetry now reports A0 monitor voltage, percentage where 5.00V is 100%, alarm level, validity, and active percentage thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
+- Barometer telemetry is active for BMP280/BME280 at `0x76`: pressure, temperature, absolute altitude estimate, relative altitude, raw readings, status, and chip ID are emitted to the RMS. Altitude hold remains intentionally disabled.
+- Dashboard PID tuning now sends all Roll/Pitch/Yaw gain terms as a full `PID:` serial command. Firmware applies the values live, resets PID integrators, and replies with `ACK:PID,...`.
 - Roll/pitch IMU axes are swapped in firmware for the current board orientation, so physical roll and physical pitch are reported and controlled under the correct names.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
@@ -50,14 +52,14 @@ Passing:
 - Static validation for archived RC pin mapping and throttle capture from D5
 - Static validation for D13 status LED behavior in flight and calibration sketches
 - Static validation for archived-style arming/disarming thresholds, `150 ms` holds, and re-arm neutral latch
-- Static validation for flight firmware version/revision boot and telemetry fields
+- Static validation for flight firmware version/revision boot, telemetry fields, and barometer parser/dashboard behavior
 
 Arduino compilation:
 
 - Arduino CLI `1.5.1` was installed locally under `tools/arduino-cli/`.
 - Arduino AVR core `1.8.8` and Servo library `1.3.0` were installed locally.
-- Flight controller compile passed for `arduino:avr:uno`: `24878` bytes flash, `929` bytes RAM.
-- Calibration Wizard v4 compile passed for `arduino:avr:uno`: `23242` bytes flash, `647` bytes RAM.
+- Flight controller compile passed for `arduino:avr:uno`: `30884` bytes flash, `1136` bytes RAM.
+- Calibration Wizard v4 compile passed for `arduino:avr:uno`: `22172` bytes flash, `595` bytes RAM.
 
 ## Archived-code transplant
 

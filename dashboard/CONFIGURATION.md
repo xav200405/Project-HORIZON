@@ -132,6 +132,13 @@ These are the fields the RMS understands best. Future UAV firmware should keep t
 | `compass_status` | `compassStatus` | Compass status string. |
 | `compass_driver` | `compassDriver` | Compass driver string. |
 | `mag_x`, `mag_y`, `mag_z` | `magX`, `magY`, `magZ` | Magnetometer raw values. |
+| `baro_ok` | `baroOK` | Barometer health flag. |
+| `baro_status` | `baroStatus` | Barometer status string. |
+| `baro_pressure_pa` | `baroPressurePa` | Compensated barometer pressure in pascals. |
+| `baro_pressure_hpa` | derived | Compensated pressure in hectopascals for graphing. |
+| `baro_temperature_c` | `baroTempC` | Barometer temperature in Celsius. |
+| `baro_altitude_m` | `baroAltitudeM` | Absolute altitude estimate from sea-level pressure. |
+| `baro_relative_altitude_m` | `baroRelativeAltitudeM` | Relative altitude from first valid pressure reading. |
 | `led` | `led` | Controller LED state. |
 | `eeprom` | `eeprom` | Calibration source/status. |
 | `loop_overrun` | `loopOverrun` | Control-loop overrun flag. |
@@ -236,8 +243,8 @@ For each new UAV:
 1. Confirm the serial port for the target OS and adapter.
 2. Start the RMS with the correct `TPARC_SERIAL_PORT`.
 3. Open `/network` and verify packet rate, packet age, serial status, and latest raw line.
-4. Open `/telemetry` and confirm RC channels, motor outputs, IMU values, compass status, and state fields update.
-5. Open `/` and verify Overview shows battery, heading, attitude, loop rate, graphs, and analysis values.
+4. Open `/telemetry` and confirm RC channels, motor outputs, IMU values, compass status, barometer status, and state fields update.
+5. Open `/` and verify Overview shows battery, barometer, heading, attitude, loop rate, graphs, and analysis values.
 6. Create/change user accounts in `/settings`.
 7. Export a short CSV/JSON recording and verify values look correct.
 8. Keep props removed until all telemetry and safety indicators are verified.

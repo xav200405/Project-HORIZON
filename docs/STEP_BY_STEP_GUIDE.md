@@ -31,7 +31,7 @@ Change these passwords from Settings before field use.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.10.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.11.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -216,18 +216,22 @@ The Pi must be connected to the Arduino over USB.
    | Arduino Nano old bootloader | `arduino:avr:nano:cpu=atmega328old` |
    | Arduino Mega 2560 | `arduino:avr:mega` |
 
-6. Choose a firmware file:
+6. To install the firmware bundled with the RMS, click **Flash bundled firmware**.
+   This bundled flight-controller build emits `battery_monitor_enabled`,
+   `battery_voltage`, and `battery_percent` telemetry.
+
+7. To upload a custom sketch instead, choose a firmware file:
 
    - `.ino` file, or
    - `.zip` containing an Arduino sketch folder.
 
-7. Use Compile only first when testing a new sketch.
+8. Use Compile only first when testing a new sketch.
 
-8. When compile succeeds, run Compile and upload.
+9. When compile succeeds, run Compile and upload.
 
-9. Watch the Upload log for compiler and uploader output.
+10. Watch the Upload log for compiler and uploader output.
 
-10. After upload finishes, the RMS restarts its telemetry serial reader.
+11. After upload finishes, the RMS restarts its telemetry serial reader.
 
 Notes:
 
@@ -241,6 +245,8 @@ Useful firmware settings:
 
 ```bash
 TPARC_ARDUINO_CLI=arduino-cli
+TPARC_ARDUINO_CLI_CONFIG=
+TPARC_ARDUINO_CLI_CWD=
 TPARC_ARDUINO_DEFAULT_FQBN=arduino:avr:uno
 TPARC_FIRMWARE_UPLOAD_DIR=/var/lib/tparc-rms/firmware
 TPARC_FIRMWARE_TIMEOUT=600

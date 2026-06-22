@@ -15,11 +15,20 @@ BOARD_OPTIONS = [
 ]
 ALLOWED_EXTENSIONS = {".ino", ".zip"}
 MAX_OUTPUT_CHARS = 24000
+BUNDLED_SKETCHES = [
+    {
+        "id": "flight_controller_v2_6_1",
+        "label": "Flight controller v2.6.1",
+        "path": Path(__file__).resolve().parent / "bundled_firmware" / "controller_firmware_v2.6.1",
+    }
+]
 
 
 def firmware_config(app_config):
     return {
         "cli": os.environ.get("TPARC_ARDUINO_CLI", "arduino-cli"),
+        "cli_config": os.environ.get("TPARC_ARDUINO_CLI_CONFIG", ""),
+        "cli_cwd": os.environ.get("TPARC_ARDUINO_CLI_CWD", ""),
         "default_fqbn": os.environ.get("TPARC_ARDUINO_DEFAULT_FQBN", "arduino:avr:uno"),
         "upload_dir": Path(os.environ.get("TPARC_FIRMWARE_UPLOAD_DIR", app_config.get("FIRMWARE_UPLOAD_DIR", ""))),
         "timeout": int(os.environ.get("TPARC_FIRMWARE_TIMEOUT", "600")),
@@ -80,6 +89,15 @@ def run_command(command, timeout, cwd=None):
         }
 
 
+def cli_command(config, *args):
+    command = [resolve_cli(config)]
+    cli_config = config.get("cli_config", "")
+    if cli_config and Path(cli_config).exists():
+        command.extend(["--config-file", cli_config])
+    command.extend(args)
+    return command
+
+
 def firmware_status(app_config):
     config = firmware_config(app_config)
     cli = resolve_cli(config)
@@ -90,13 +108,38 @@ def firmware_status(app_config):
         "board_options": BOARD_OPTIONS,
         "ports": list_serial_ports(),
         "max_mb": config["max_mb"],
+        "bundled_sketches": bundled_sketch_status(),
     }
     if status["cli_available"]:
-        version = run_command([cli, "version"], timeout=10)
+        version = run_command(cli_command(config, "version"), timeout=10, cwd=config.get("cli_cwd") or None)
         status["version"] = version["output"].splitlines()[0] if version["output"] else "arduino-cli"
     else:
         status["version"] = "arduino-cli not found"
     return status
+
+
+def _read_define(text, name):
+    match = re.search(rf'#define\s+{re.escape(name)}\s+"([^"]+)"', text)
+    return match.group(1) if match else ""
+
+
+def bundled_sketch_status():
+    sketches = []
+    for item in BUNDLED_SKETCHES:
+        ino_files = sorted(item["path"].glob("*.ino"))
+        source = ino_files[0] if ino_files else None
+        text = source.read_text(encoding="utf-8", errors="replace") if source and source.exists() else ""
+        sketches.append(
+            {
+                "id": item["id"],
+                "label": item["label"],
+                "available": bool(source and source.exists()),
+                "version": _read_define(text, "FIRMWARE_VERSION"),
+                "revision": _read_define(text, "FIRMWARE_REVISION"),
+                "path": str(item["path"]),
+            }
+        )
+    return sketches
 
 
 def safe_stem(filename):
@@ -156,7 +199,20 @@ def prepare_sketch(upload, upload_root, max_mb):
     return sketch.parent
 
 
-def upload_firmware(app_config, upload, port, fqbn, compile_only=False):
+def prepare_bundled_sketch(bundled_id, upload_root):
+    item = next((sketch for sketch in BUNDLED_SKETCHES if sketch["id"] == bundled_id), None)
+    if not item:
+        raise ValueError("Unknown bundled firmware selection.")
+    source = item["path"]
+    if not source.exists():
+        raise ValueError("Bundled firmware is not available in this installation.")
+    upload_root.mkdir(parents=True, exist_ok=True)
+    target = upload_root / time.strftime("%Y%m%d-%H%M%S") / source.name
+    shutil.copytree(source, target)
+    return target
+
+
+def upload_firmware(app_config, upload, port, fqbn, compile_only=False, bundled_id=""):
     config = firmware_config(app_config)
     cli = resolve_cli(config)
     if not (shutil.which(cli) or Path(cli).exists()):
@@ -166,13 +222,14 @@ def upload_firmware(app_config, upload, port, fqbn, compile_only=False):
     if not fqbn or ":" not in fqbn:
         raise ValueError("Select a valid Arduino board FQBN.")
 
-    sketch_dir = prepare_sketch(upload, config["upload_dir"], config["max_mb"])
-    compile_cmd = [cli, "compile", "--fqbn", fqbn, str(sketch_dir)]
-    upload_cmd = [cli, "upload", "-p", port, "--fqbn", fqbn, str(sketch_dir)]
-    compile_result = run_command(compile_cmd, config["timeout"])
+    sketch_dir = prepare_bundled_sketch(bundled_id, config["upload_dir"]) if bundled_id else prepare_sketch(upload, config["upload_dir"], config["max_mb"])
+    compile_cmd = cli_command(config, "compile", "--fqbn", fqbn, str(sketch_dir))
+    upload_cmd = cli_command(config, "upload", "-p", port, "--fqbn", fqbn, str(sketch_dir))
+    command_cwd = config.get("cli_cwd") or None
+    compile_result = run_command(compile_cmd, config["timeout"], cwd=command_cwd)
     upload_result = None
     if compile_result["ok"] and not compile_only:
-        upload_result = run_command(upload_cmd, config["timeout"])
+        upload_result = run_command(upload_cmd, config["timeout"], cwd=command_cwd)
     ok = compile_result["ok"] and (compile_only or bool(upload_result and upload_result["ok"]))
     return {
         "ok": ok,

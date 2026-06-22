@@ -97,11 +97,12 @@ def firmware_upload_route():
     port = request.form.get("port", "").strip()
     fqbn = request.form.get("fqbn", "").strip()
     compile_only = request.form.get("compile_only") == "1"
+    bundled = request.form.get("bundled", "").strip()
     upload = request.files.get("sketch")
-    audit_details = {"port": port, "fqbn": fqbn, "compile_only": compile_only}
+    audit_details = {"port": port, "fqbn": fqbn, "compile_only": compile_only, "bundled": bundled}
     serial_worker.stop()
     try:
-        result = upload_firmware(current_app.config, upload, port, fqbn, compile_only)
+        result = upload_firmware(current_app.config, upload, port, fqbn, compile_only, bundled)
     except Exception as exc:
         audit_details["error"] = str(exc)
         audit(current_app.config["DATABASE"], session["username"], "FIRMWARE_UPLOAD_FAILED", audit_details, request.remote_addr)

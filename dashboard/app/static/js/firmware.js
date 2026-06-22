@@ -1,4 +1,5 @@
 const csrf = document.body.dataset.csrf;
+let bundledSketch = null;
 
 function qs(id) { return document.getElementById(id); }
 function escapeHtml(value) {
@@ -24,6 +25,10 @@ function updateSelectionLabels() {
   qs("firmwareSelectedBoard").textContent = activeFqbn() || "-";
 }
 
+function firmwareReady() {
+  return !qs("firmwareUploadButton").disabled;
+}
+
 async function refreshFirmwareStatus() {
   try {
     const res = await fetch("/api/firmware/status");
@@ -34,6 +39,10 @@ async function refreshFirmwareStatus() {
     qs("firmwareCliVersion").textContent = data.version || "-";
     qs("firmwareCliPath").textContent = data.cli || "-";
     qs("firmwareMaxUpload").textContent = `${data.max_mb || 0} MB`;
+    bundledSketch = (data.bundled_sketches || []).find(item => item.id === "flight_controller_v2_6_1") || null;
+    qs("bundledFirmwareLabel").textContent = bundledSketch?.label || "-";
+    qs("bundledFirmwareVersion").textContent = bundledSketch?.version || "-";
+    qs("bundledFirmwareRevision").textContent = bundledSketch?.revision || "-";
 
     const portSelect = qs("firmwarePort");
     const previousPort = portSelect.value;
@@ -56,7 +65,9 @@ async function refreshFirmwareStatus() {
       `<div class="firmware-port"><b>${escapeHtml(port.device)}</b><span>${escapeHtml(port.description || "")}</span><small>${escapeHtml(port.hwid || "")}</small></div>`
     )).join("") || '<div class="firmware-port"><b>No ports</b><span>Connect the Arduino over USB and refresh.</span></div>';
 
-    qs("firmwareUploadButton").disabled = !data.cli_available || !(data.ports || []).length;
+    const disabled = !data.cli_available || !(data.ports || []).length;
+    qs("firmwareUploadButton").disabled = disabled;
+    qs("flashBundledFirmware").disabled = disabled || !bundledSketch?.available;
     updateSelectionLabels();
   } catch (err) {
     setBadge("Status error", "red");
@@ -103,7 +114,43 @@ async function uploadFirmware(event) {
   }
 }
 
+async function flashBundledFirmware() {
+  if (!bundledSketch?.available || !firmwareReady()) return;
+  if (!confirm(`Flash ${bundledSketch.label} ${bundledSketch.version || ""} ${bundledSketch.revision || ""} to the selected Arduino?`)) return;
+  const form = new FormData();
+  form.set("bundled", bundledSketch.id);
+  form.set("port", qs("firmwarePort").value);
+  form.set("fqbn", activeFqbn());
+  if (qs("compileOnly").checked) form.set("compile_only", "1");
+  setBadge("Uploading", "amber");
+  setLog("Pausing telemetry serial link, compiling bundled flight firmware, then uploading...");
+  qs("flashBundledFirmware").disabled = true;
+  qs("firmwareUploadButton").disabled = true;
+  try {
+    const res = await fetch("/api/firmware/upload", {
+      method: "POST",
+      headers: { "X-CSRF-Token": csrf },
+      body: form,
+    });
+    const data = await res.json();
+    if (!res.ok || !data.ok) {
+      setBadge("Failed", "red");
+      setLog(`${data.error || "Bundled firmware upload failed."}\n\n${data.compile?.output || ""}\n${data.upload?.output || ""}`.trim());
+      return;
+    }
+    setBadge(qs("compileOnly").checked ? "Compiled" : "Uploaded", "green");
+    setLog([data.compile?.output || "Compile completed.", data.upload?.output || ""].filter(Boolean).join("\n\n"));
+    await refreshFirmwareStatus();
+  } catch (err) {
+    setBadge("Failed", "red");
+    setLog(`Bundled firmware upload request failed.\n${err}`);
+  } finally {
+    await refreshFirmwareStatus();
+  }
+}
+
 qs("firmwareForm").addEventListener("submit", uploadFirmware);
+qs("flashBundledFirmware").addEventListener("click", flashBundledFirmware);
 qs("refreshFirmwareStatus").addEventListener("click", refreshFirmwareStatus);
 qs("firmwarePort").addEventListener("change", updateSelectionLabels);
 qs("firmwareBoard").addEventListener("change", updateSelectionLabels);

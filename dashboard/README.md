@@ -57,6 +57,14 @@ flight controller through the Raspberry Pi USB serial link. The Pi package
 attempts to install `arduino-cli`, `avrdude`, and the common `arduino:avr`
 core.
 
+The Firmware page also carries a bundled flight-controller build. Use
+`Flash bundled firmware` when the Arduino is not emitting the expected RMS
+telemetry fields, including battery percentage telemetry.
+
+If Arduino CLI needs a specific config file, set `TPARC_ARDUINO_CLI_CONFIG`.
+If that config uses relative paths, set `TPARC_ARDUINO_CLI_CWD` to the directory
+those paths should resolve from.
+
 To update an installed Pi with a newer package:
 
 ```bash
@@ -258,7 +266,8 @@ Step-by-step workflow:
 4. Confirm `arduino-cli` is ready.
 5. Select the Arduino serial port.
 6. Select the board FQBN.
-7. Upload a `.ino` file or zipped Arduino sketch folder.
+7. Use Flash bundled firmware to install the RMS-matched flight controller
+   build, or upload a `.ino` file/zipped Arduino sketch folder for custom code.
 8. Use Compile only first when testing a new sketch.
 9. Run Compile and upload when ready.
 10. Read the upload log for compiler and uploader output.

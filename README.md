@@ -161,7 +161,7 @@ python tools\self_check.py
 Compile both Arduino sketches when Arduino CLI is available:
 
 ```powershell
-tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno firmware\flight_controller\controller_firmware
+tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno firmware\flight_controller\controller_firmware_v2.6.1
 tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno firmware\calibration_wizard\CalibrationWizard
 ```
 

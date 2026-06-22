@@ -4,10 +4,21 @@ import re
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
-FLIGHT = ROOT / "firmware" / "flight_controller" / "controller_firmware" / "controller_firmware.ino"
 CAL = ROOT / "firmware" / "calibration_wizard" / "CalibrationWizard" / "CalibrationWizard.ino"
 DASH = ROOT / "dashboard" / "app"
 JS = DASH / "static" / "js" / "dashboard.js"
+
+
+def active_flight_sketch():
+    flight_root = ROOT / "firmware" / "flight_controller"
+    candidates = sorted(
+        flight_root.glob("*/**/*.ino"),
+        key=lambda path: (path.parent.name != path.stem, str(path)),
+    )
+    return candidates[0] if candidates else flight_root / "controller_firmware" / "controller_firmware.ino"
+
+
+FLIGHT = active_flight_sketch()
 
 
 def read(path):

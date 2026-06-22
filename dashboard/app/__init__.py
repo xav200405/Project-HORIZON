@@ -42,10 +42,6 @@ def create_app():
         SERIAL_PORT=detect_serial_port(),
         SERIAL_BAUD=int(os.environ.get("TPARC_SERIAL_BAUD", "115200")),
         RMS_KILL_ENABLED=os.environ.get("TPARC_RMS_KILL_ENABLED") == "1",
-        FIRMWARE_UPLOAD_DIR=os.environ.get(
-            "TPARC_FIRMWARE_UPLOAD_DIR",
-            os.path.join(os.path.dirname(os.environ.get("TPARC_DB", os.path.join(os.getcwd(), "tparc.sqlite3"))), "firmware"),
-        ),
     )
     init_db(app.config["DATABASE"])
     init_auth(app.config["DATABASE"])

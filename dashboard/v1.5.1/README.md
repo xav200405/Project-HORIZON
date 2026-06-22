@@ -8,17 +8,17 @@ TP-ARC Remote Monitoring System.
 Use this archive:
 
 ```bash
-dist/tparc-rms-pi-app-2026.06-rev01.11.tar.gz
+dist/tparc-rms-pi-app-2026.06-rev01.13.tar.gz
 ```
 
 ## Install On The Raspberry Pi
 
-1. Copy `dist/tparc-rms-pi-app-2026.06-rev01.11.tar.gz` to the Pi.
+1. Copy `dist/tparc-rms-pi-app-2026.06-rev01.13.tar.gz` to the Pi.
 
 2. Extract it:
 
 ```bash
-tar -xzf tparc-rms-pi-app-2026.06-rev01.11.tar.gz
+tar -xzf tparc-rms-pi-app-2026.06-rev01.13.tar.gz
 ```
 
 3. Enter the extracted folder:
@@ -51,23 +51,18 @@ The package installs the dashboard as `tparc-rms.service`, stores config in
 - Cleaner client-presentable Overview page.
 - Detailed Telemetry page for full engineering data.
 - Network page for link health.
-- Admin Firmware page for remote Arduino sketch compile/upload.
 - GitHub-aware updater.
 
-## Upload Firmware Through The Pi
+## Fully Uninstall For Fresh Install
 
-1. Connect the Arduino to the Raspberry Pi over USB.
-2. Log in to RMS as an admin.
-3. Open Firmware.
-4. Select the detected serial port.
-5. Select the board FQBN.
-6. Upload a `.ino` file or zipped Arduino sketch folder.
-7. Use Compile only first.
-8. Run Compile and upload when ready.
-9. Review the upload log.
+From the extracted package folder on the Pi:
 
-The RMS pauses telemetry serial access during upload and restarts it afterward.
+```bash
+sudo bash uninstall_all.sh
+```
 
+This removes the service, app files, config, database, telemetry data, and
+runtime cache.
 ## Update Later
 
 ```bash

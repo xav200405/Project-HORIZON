@@ -8,7 +8,6 @@ DATA_DIR="${TPARC_DATA_DIR:-/var/lib/tparc-rms}"
 SERVICE_FILE="/etc/systemd/system/${APP_NAME}.service"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 MODE="${1:-auto}"
-ARDUINO_APT_PACKAGES="arduino-cli avrdude"
 PIP_PACKAGES="
 Flask==3.0.3
 Flask-SocketIO==5.3.6
@@ -67,23 +66,6 @@ if ! id "${RUN_USER}" >/dev/null 2>&1; then
   exit 1
 fi
 RUN_GROUP="$(id -gn "${RUN_USER}")"
-
-if [ "${TPARC_SKIP_ARDUINO_TOOLS:-0}" != "1" ] && command -v apt-get >/dev/null 2>&1; then
-  echo "Checking Arduino upload tools"
-  DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends ${ARDUINO_APT_PACKAGES} || \
-    echo "Arduino CLI packages were not available from apt; configure TPARC_ARDUINO_CLI manually."
-fi
-
-if command -v arduino-cli >/dev/null 2>&1 && [ "${TPARC_INSTALL_ARDUINO_AVR_CORE:-1}" = "1" ]; then
-  echo "Preparing Arduino AVR core for ${RUN_USER}"
-  if command -v runuser >/dev/null 2>&1; then
-    runuser -u "${RUN_USER}" -- arduino-cli core update-index || true
-    runuser -u "${RUN_USER}" -- arduino-cli core install arduino:avr || true
-  else
-    arduino-cli core update-index || true
-    arduino-cli core install arduino:avr || true
-  fi
-fi
 
 echo "Updating TP-ARC RMS for user ${RUN_USER}"
 install -d -m 0755 "${INSTALL_DIR}" "${CONFIG_DIR}" "${DATA_DIR}"

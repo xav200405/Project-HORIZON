@@ -13,22 +13,30 @@ Aviation Research Centre.
 
 Current flight controller firmware identity:
 
-- Version: `FC-0.8.1`
-- Revision: `2026-06-19.1`
+- Version: `FC-0.8.3`
+- Revision: `2026-06-22.2`
+
+Current RMS package identity:
+
+- Package: `2026.06-rev01.13`
+- Current release folder: `dashboard/v1.5.1/`
 
 ## Current hardware bring-up defaults
 
 - `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 stepped-down monitor signal.
 - Battery telemetry now reports A0 monitor voltage, percentage where 5.00V is 100%, alarm level, validity, and active percentage thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
+- Roll/pitch IMU axes are swapped in firmware for the current board orientation, so physical roll and physical pitch are reported and controlled under the correct names.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
 - Flight controller and Calibration Wizard both use the archived PCB receiver map: CH1 roll D7, CH2 pitch D8, CH3 throttle D5, CH4 yaw D4.
 - Calibration Wizard RC setup now checks CH1-CH4 receiver health, captures neutral/safe positions, verifies stick directions one by one, and refuses to commit weak endpoint captures.
 - D13 is now a status LED. Flight firmware uses solid-on boot/armed, fast blink error/failsafe, double blink ready-to-arm, and slow heartbeat not-ready. Calibration Wizard uses solid-on boot/busy and slow heartbeat at the menu.
 - Flight firmware arming/disarming now follows the archived controller logic: throttle low + yaw right arms after `150 ms`, throttle low + yaw left disarms after `150 ms`, and a re-arm neutral latch is required after failsafe.
-- Flight firmware now swaps and inverts MPU6050 roll/pitch axes to match the current board orientation, and `EVT:ARM_DENIED` includes raw `THR_US` and `YAW_US` diagnostics.
+- Flight firmware now swaps the MPU6050 roll/pitch axes to match the current board orientation, and `EVT:ARM_DENIED` includes raw `THR_US` and `YAW_US` diagnostics.
 - Flight firmware now captures the physical CH6 kill switch on D12/PCINT4. CH6 above `1800 us` latches kill/failsafe with reason `CH6_KILL`; CH6 below `1100 us` plus throttle-low/yaw-centered releases the physical kill latch.
 - RMS/digital kill is present but disabled by default in both firmware and dashboard. Firmware replies `ERR:RMS_KILL_DISABLED` to `CMD:KILL`, and the dashboard endpoint/button stay disabled unless explicitly commissioned.
+- Remote Arduino firmware upload has been removed from the RMS to keep the Raspberry Pi app focused on monitoring, telemetry, exports, settings, and app updates. Arduino sketches should be flashed outside the RMS with normal Arduino tools.
+- The Pi package now includes `uninstall_all.sh` for a full fresh-install reset that removes the service, app files, config, database, telemetry data, and runtime cache.
 
 ## Verification
 
@@ -47,7 +55,7 @@ Arduino compilation:
 
 - Arduino CLI `1.5.1` was installed locally under `tools/arduino-cli/`.
 - Arduino AVR core `1.8.8` and Servo library `1.3.0` were installed locally.
-- Flight controller compile passed for `arduino:avr:uno`: `23242` bytes flash, `1126` bytes RAM.
+- Flight controller compile passed for `arduino:avr:uno`: `24878` bytes flash, `929` bytes RAM.
 - Calibration Wizard v4 compile passed for `arduino:avr:uno`: `23242` bytes flash, `647` bytes RAM.
 
 ## Archived-code transplant

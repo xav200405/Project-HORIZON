@@ -3,6 +3,10 @@
 This folder packages the Project HORIZON TP-ARC Remote Monitoring System as a
 small Raspberry Pi service.
 
+This is the older v1.5 package copy. For new installs, use the current
+`dashboard/v1.5.1` package, which removes remote firmware upload and includes
+the full fresh-install reset script `uninstall_all.sh`.
+
 Copy this folder to the Raspberry Pi, then run:
 
 ```bash
@@ -121,4 +125,11 @@ not deleted accidentally. To remove data too:
 
 ```bash
 sudo bash uninstall.sh --purge-data
+```
+
+For the newer one-click full reset workflow, extract the current `v1.5.1`
+package and run:
+
+```bash
+sudo bash uninstall_all.sh
 ```

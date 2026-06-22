@@ -1,7 +1,7 @@
 # Project HORIZON Step-by-Step Guide
 
 This guide is for setting up, using, updating, and maintaining the TP-ARC
-Raspberry Pi Remote Monitoring System (RMS) and Arduino firmware workflow.
+Raspberry Pi Remote Monitoring System (RMS).
 
 Read `docs/SAFETY_ADVISORY.md` before connecting motors, propellers,
 batteries, RF links, or flight hardware.
@@ -31,7 +31,7 @@ Change these passwords from Settings before field use.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.11.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.13.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -82,7 +82,7 @@ The installer creates:
 | --- | --- |
 | `/opt/tparc-rms/` | Installed launcher, updater, and Python virtual environment. |
 | `/etc/tparc-rms/tparc-rms.env` | Main configuration file. |
-| `/var/lib/tparc-rms/` | Database, runtime extraction, and firmware upload workspace. |
+| `/var/lib/tparc-rms/` | Database and runtime extraction workspace. |
 | `/etc/systemd/system/tparc-rms.service` | Systemd service. |
 
 ## 3. Configure The Arduino Serial Port
@@ -179,10 +179,6 @@ Use Network when the data link looks unhealthy:
 - Browser/socket connection status.
 - Latest raw serial line.
 
-### Firmware
-
-Admin-only page for remote Arduino firmware upload through the Raspberry Pi.
-
 ### Settings
 
 Admin-only page for:
@@ -193,73 +189,7 @@ Admin-only page for:
 - Battery percentage alarm thresholds.
 - Calibration trigger.
 
-## 5. Upload Arduino Firmware Through The RMS
-
-The Pi must be connected to the Arduino over USB.
-
-1. Log in as an admin.
-
-2. Open Firmware from the top navigation.
-
-3. Confirm that `arduino-cli` is shown as ready.
-
-4. Select the detected Arduino serial port.
-
-5. Select the board FQBN.
-
-   Common options:
-
-   | Board | FQBN |
-   | --- | --- |
-   | Arduino Uno | `arduino:avr:uno` |
-   | Arduino Nano | `arduino:avr:nano` |
-   | Arduino Nano old bootloader | `arduino:avr:nano:cpu=atmega328old` |
-   | Arduino Mega 2560 | `arduino:avr:mega` |
-
-6. To install the firmware bundled with the RMS, click **Flash bundled firmware**.
-   This bundled flight-controller build emits `battery_monitor_enabled`,
-   `battery_voltage`, and `battery_percent` telemetry.
-
-7. To upload a custom sketch instead, choose a firmware file:
-
-   - `.ino` file, or
-   - `.zip` containing an Arduino sketch folder.
-
-8. Use Compile only first when testing a new sketch.
-
-9. When compile succeeds, run Compile and upload.
-
-10. Watch the Upload log for compiler and uploader output.
-
-11. After upload finishes, the RMS restarts its telemetry serial reader.
-
-Notes:
-
-- The RMS pauses telemetry serial access during upload so `arduino-cli` can use
-  the USB serial port.
-- Every firmware upload attempt is recorded in the audit log.
-- If `arduino-cli` is missing, install it on the Pi or set `TPARC_ARDUINO_CLI`
-  in `/etc/tparc-rms/tparc-rms.env`.
-
-Useful firmware settings:
-
-```bash
-TPARC_ARDUINO_CLI=arduino-cli
-TPARC_ARDUINO_CLI_CONFIG=
-TPARC_ARDUINO_CLI_CWD=
-TPARC_ARDUINO_DEFAULT_FQBN=arduino:avr:uno
-TPARC_FIRMWARE_UPLOAD_DIR=/var/lib/tparc-rms/firmware
-TPARC_FIRMWARE_TIMEOUT=600
-TPARC_FIRMWARE_MAX_MB=8
-```
-
-Restart after changing config:
-
-```bash
-sudo systemctl restart tparc-rms
-```
-
-## 6. Update The RMS From GitHub
+## 5. Update The RMS From GitHub
 
 The installed updater already knows this repository:
 
@@ -305,6 +235,28 @@ The update script preserves:
 
 - `/etc/tparc-rms/tparc-rms.env`
 - `/var/lib/tparc-rms`
+
+## 6. Fully Uninstall The RMS
+
+Use this when you want a completely fresh install with no old database,
+configuration, runtime files, or service state left behind.
+
+1. Extract any current RMS package on the Pi.
+
+2. Enter the package folder:
+
+   ```bash
+   cd tparc-rms-pi-app
+   ```
+
+3. Run the full uninstall script:
+
+   ```bash
+   sudo bash uninstall_all.sh
+   ```
+
+This removes `/opt/tparc-rms`, `/etc/tparc-rms`, `/var/lib/tparc-rms`, the
+`tparc-rms.service` systemd unit, telemetry data, and runtime cache.
 
 ## 7. Build A New Pi Package From Source
 
@@ -388,34 +340,6 @@ http://<raspberry-pi-ip>:5000/login
 ```
 
 Make sure both devices are on the same network.
-
-### Firmware Upload Cannot Find Arduino CLI
-
-Check:
-
-```bash
-which arduino-cli
-arduino-cli version
-```
-
-If it is installed somewhere custom, set:
-
-```bash
-TPARC_ARDUINO_CLI=/path/to/arduino-cli
-```
-
-Then restart:
-
-```bash
-sudo systemctl restart tparc-rms
-```
-
-### Firmware Upload Cannot Open Serial Port
-
-1. Close Arduino IDE or any other serial monitor.
-2. Confirm the RMS service user is in `dialout`.
-3. Reboot after changing groups.
-4. Reopen the Firmware page and refresh status.
 
 ### Update Cannot Find A Package
 

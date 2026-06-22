@@ -6,16 +6,15 @@ Source: project prompt supplied during development.
 
 | Requirement | Implementation |
 |---|---|
-| Arduino Uno / ATmega328P C++ with `Wire.h` and `Servo.h` | `firmware/flight_controller/controller_firmware/controller_firmware.ino` |
-| Motor pins D6/D9/D10/D11 and X-frame equations | `mixMotors()` |
-| 400 Hz rate loop, 200 Hz attitude loop, 50 Hz outer loop | `loop()` scheduler constants |
-| Complementary roll/pitch filter with alpha 0.98 | `updateComplementaryFilter()` |
-| Compass/gyro yaw fusion with wrap-around | `updateYawFusion()` |
-| Generic PID with saturation anti-windup | `PIDController::update()` |
-| Heading hold/command state machine | `updateHeadingControl()` |
-| RC normalization, deadbands, arming/disarming holds | `updateReceiver()`, `detectArming()` |
-| Failsafe on RC loss, sensor health, tilt, watchdog reset | `checkFailsafe()` |
-| Serial telemetry and command handling | `emitTelemetry()`, `handleSerialCommand()` |
+| Arduino Uno / ATmega328P C++ with `Wire.h`, `EEPROM.h`, and `Servo.h` behavior through timed ESC pulses | `firmware/flight_controller/controller_firmware_v2.6.1/controller_firmware_v2.6.1.ino` |
+| Motor pins D6/D9/D10/D11 and current X-frame equations | `mixMotors()` |
+| 250 Hz ESC/control loop with lower-rate compass, battery, and telemetry tasks | `LOOP_TIME_US`, `COMPASS_UPDATE_INTERVAL_MS`, `BATTERY_SAMPLE_INTERVAL_MS`, `TELEMETRY_INTERVAL_MS`, `loop()` |
+| Complementary roll/pitch filter with MPU roll/pitch axis swap for current board orientation | `updateAngles()`, `SWAP_ROLL_PITCH_AXES` |
+| Compass heading readout and heading-hold/command state machine | `updateCompass()`, `updateHeadingHoldFromYawStick()` |
+| PID with saturation and anti-windup | `calculate_pid()`, `MAX_PID_OUTPUT`, `constrainFloat()` |
+| RC capture, normalization, deadbands, arming/disarming holds | `processRxEdge()`, `copyAndCalibrateReceiver()`, `check_safety_and_arming()` |
+| Failsafe on RC loss, sensor health, CH6 physical lockout, and battery emergency/invalid state | `check_safety_and_arming()`, `emergencyLockoutActive`, `batteryFailsafeActive` |
+| Serial telemetry and command handling | `printTelemetryJson()`, `handleTelemetry()`, `handleSerialTuning()` |
 
 ## Part H: Intelligent Battery Monitoring
 
@@ -24,7 +23,7 @@ Source: project prompt supplied during development.
 | 0-5V stepped-down monitor signal on A0 | `updateBatteryMonitor()` |
 | A0 monitor voltage, battery percentage, alarm thresholds | `BatteryState`, threshold constants, `handleBatteryCommand()` |
 | Alarm levels LOW/CRITICAL/EMERGENCY | `classifyBatteryAlarm()` |
-| Telemetry fields for Pi dashboard | `printTelemetryJson()` emits `battery_voltage`, `battery_cell_voltage`, `battery_soc`, `battery_alarm`, `battery_valid` |
+| Telemetry fields for Pi dashboard | `printTelemetryJson()` emits `battery_monitor_enabled`, `battery_voltage`, `battery_monitor_voltage`, `battery_cell_voltage`, `battery_soc`, `battery_percent`, `battery_alarm`, `battery_valid`, and thresholds |
 | Pi parser and dashboard battery panel | `dashboard/app/telemetry.py`, `dashboard/app/static/js/dashboard.js` |
 
 ## Part I: Calibration Wizard
@@ -35,7 +34,7 @@ Source: project prompt supplied during development.
 | EEPROM layout with magic/version/CRC | `CalibrationBlob`, `saveCalibration()`, `loadCalibration()` |
 | Gyro, accel 6-point, HW-127/QMC5883P compass, barometer, RC, ESC workflows | Individual menu handlers plus `runAllCalibrations()` |
 | Countdown timers in Serial Monitor | `countdownSeconds()` and `progressCountdown()` |
-| Clear accelerometer pose instructions | `printAccelOrientation()` in v3 wizard |
+| Clear accelerometer pose instructions | Calibration Wizard guided accelerometer menu prompts |
 | Compass calibration finesse and quality feedback | Guided compass phases plus `printCompassCoverage()` |
 | Validation/reporting | `printValidationReport()` |
 
@@ -47,13 +46,13 @@ Source: project prompt supplied during development.
 | SQLite audit log and telemetry persistence | `dashboard/app/storage.py` |
 | bcrypt password hashing and RBAC | `dashboard/app/auth.py` |
 | Login, session timeout, brute-force lockout | `dashboard/app/auth.py`, templates |
-| PID tuning, kill switch, serial commands | `dashboard/app/routes.py`, `dashboard/app/serial_worker.py` |
+| PID tuning, battery thresholds, calibration trigger, and optional disabled-by-default RMS kill command | `dashboard/app/routes.py`, `dashboard/app/serial_worker.py` |
 | CSV/PDF/PNG export support | `dashboard/app/routes.py`, frontend chart export |
 | Dashboard panels and alert banner | `dashboard/app/templates/dashboard.html`, static JS/CSS |
 
 ## Known deployment work
 
 - Install Python dependencies on the Raspberry Pi.
-- Provide TLS certificate/key for production service on port 8443.
-- Compile/upload Arduino sketches with the Arduino IDE or CLI.
+- Provide TLS certificate/key or a reverse proxy before exposing the RMS beyond trusted bench networks.
+- Compile/upload Arduino sketches with the Arduino IDE or CLI outside the RMS.
 - Tune PID gains and voltage divider constants on real hardware.

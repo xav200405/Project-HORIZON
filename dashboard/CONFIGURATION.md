@@ -14,7 +14,7 @@ A future UAV is compatible with this RMS when:
 - The packet contains the same core aircraft values, or compatible aliases listed below.
 - The RC inputs and motor outputs keep the same semantic meaning.
 
-The RMS does not currently require GPS. Without GPS, the Operations route view is a relative telemetry trace instead of a true map.
+The RMS does not currently require GPS. The current dashboard focuses on telemetry graphs, health summaries, link status, exports, and raw fields.
 
 ## Required Serial Settings
 
@@ -239,7 +239,7 @@ For each new UAV:
 2. Start the RMS with the correct `TPARC_SERIAL_PORT`.
 3. Open `/network` and verify packet rate, packet age, serial status, and latest raw line.
 4. Open `/telemetry` and confirm RC channels, motor outputs, IMU values, compass status, and state fields update.
-5. Open `/` and verify Operations page shows heading, attitude, events, and relative trace.
+5. Open `/` and verify Overview shows battery, heading, attitude, loop rate, graphs, and analysis values.
 6. Create/change user accounts in `/settings`.
 7. Export a short CSV/JSON recording and verify values look correct.
 8. Keep props removed until all telemetry and safety indicators are verified.

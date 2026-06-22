@@ -1,6 +1,6 @@
 # TP-ARC Remote Monitoring System
 
-The TP-ARC Remote Monitoring System (RMS) is the Raspberry Pi ground-station dashboard for Project HORIZON. It reads telemetry from the Arduino flight controller over serial, records telemetry to SQLite, and serves browser pages for a clean telemetry overview, detailed live telemetry, network health, firmware upload, settings, exports, and audit logs.
+The TP-ARC Remote Monitoring System (RMS) is the Raspberry Pi ground-station dashboard for Project HORIZON. It reads telemetry from the Arduino flight controller over serial, records telemetry to SQLite, and serves browser pages for a clean telemetry overview, detailed live telemetry, network health, settings, exports, and audit logs.
 
 This RMS is operator-support software, not certified aircraft safety
 equipment. Telemetry can be delayed, stale, disconnected, or wrong if the
@@ -15,7 +15,6 @@ For a full start-to-finish walkthrough, read
 - Client-presentable Overview page with key health values, graphs, analysis, and organized telemetry fields.
 - Live Telemetry page with charts, controls, raw values, and every current telemetry field.
 - Network page showing serial link health, packet rate, browser/socket status, packet age, and raw serial lines.
-- Admin Firmware page for compiling and uploading Arduino sketches through the Raspberry Pi.
 - Telemetry recording to SQLite.
 - CSV, JSON, PDF, and chart PNG export.
 - Login, roles, CSRF protection, audit log, and session timeout.
@@ -52,18 +51,8 @@ The installer creates a `tparc-rms.service` systemd service, starts it on boot,
 keeps configuration in `/etc/tparc-rms/tparc-rms.env`, and stores data in
 `/var/lib/tparc-rms`.
 
-Admins can use the Firmware page to compile and upload Arduino sketches to the
-flight controller through the Raspberry Pi USB serial link. The Pi package
-attempts to install `arduino-cli`, `avrdude`, and the common `arduino:avr`
-core.
-
-The Firmware page also carries a bundled flight-controller build. Use
-`Flash bundled firmware` when the Arduino is not emitting the expected RMS
-telemetry fields, including battery percentage telemetry.
-
-If Arduino CLI needs a specific config file, set `TPARC_ARDUINO_CLI_CONFIG`.
-If that config uses relative paths, set `TPARC_ARDUINO_CLI_CWD` to the directory
-those paths should resolve from.
+Arduino firmware is not uploaded through the RMS. Keep firmware flashing in the
+normal Arduino IDE/CLI workflow, using the source under `../firmware/`.
 
 To update an installed Pi with a newer package:
 
@@ -173,7 +162,7 @@ Change these before field use or network use.
 
 Roles:
 
-- `admin`: settings, firmware upload, user creation, command controls, exports, telemetry views.
+- `admin`: settings, user creation, command controls, exports, telemetry views.
 - `operator`: operations, markers, command controls, exports, telemetry views.
 - `viewer`: read-only monitoring.
 
@@ -247,33 +236,6 @@ It includes:
 - Server/client time delta.
 - Last raw serial line.
 - Recent link events.
-
-### Firmware
-
-Path:
-
-```text
-/firmware
-```
-
-Admin-only page for remote Arduino firmware upload through the Raspberry Pi.
-
-Step-by-step workflow:
-
-1. Connect the Arduino to the Raspberry Pi over USB.
-2. Log in as an admin.
-3. Open Firmware.
-4. Confirm `arduino-cli` is ready.
-5. Select the Arduino serial port.
-6. Select the board FQBN.
-7. Use Flash bundled firmware to install the RMS-matched flight controller
-   build, or upload a `.ino` file/zipped Arduino sketch folder for custom code.
-8. Use Compile only first when testing a new sketch.
-9. Run Compile and upload when ready.
-10. Read the upload log for compiler and uploader output.
-
-During firmware upload, the RMS pauses its telemetry serial reader, gives the
-USB serial port to `arduino-cli`, then restarts telemetry afterward.
 
 ### Settings
 

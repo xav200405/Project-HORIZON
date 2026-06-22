@@ -88,19 +88,6 @@ sudo bash update.sh
 The update script preserves `/etc/tparc-rms/tparc-rms.env` and
 `/var/lib/tparc-rms`.
 
-## Firmware Upload
-
-Admins can open the RMS Firmware page to upload `.ino` sketches or zipped
-Arduino sketch folders to the flight controller through the Raspberry Pi's USB
-serial connection. The installer tries to install `arduino-cli`, `avrdude`,
-and the common `arduino:avr` core for Uno/Nano/Mega targets. If your Pi OS
-image does not provide `arduino-cli` through apt, install it separately and set
-`TPARC_ARDUINO_CLI` in `/etc/tparc-rms/tparc-rms.env`.
-
-During firmware upload, the RMS pauses its telemetry serial reader, runs
-`arduino-cli compile`, runs `arduino-cli upload`, then restarts telemetry.
-Every attempt is recorded in the audit log.
-
 Automatic GitHub update:
 
 1. Create a GitHub release in
@@ -126,6 +113,16 @@ python3 TP_ARC_RMS_single.py
 Use that when you want a temporary one-command run instead of installing a
 service.
 
+## Full Uninstall For Fresh Install
+
+From an extracted package folder, run:
+
+```bash
+sudo bash uninstall_all.sh
+```
+
+This removes the systemd service, `/opt/tparc-rms`, `/etc/tparc-rms`,
+`/var/lib/tparc-rms`, the telemetry database, and the runtime cache.
 ## Default Admin
 
 | Username | Password | Role |

@@ -28,7 +28,7 @@ in the safety advisory.
   EEPROM-backed calibration data.
 - Raspberry Pi RMS with a client-presentable telemetry overview, detailed live
   graphs, networking telemetry, account management, data recording, exports,
-  audit logs, and admin firmware upload.
+  audit logs, and app updates.
 - An installable Raspberry Pi RMS app package plus a one-file launcher for
   temporary runs.
 - Static validation tooling and documentation for future UAV adaptation.
@@ -58,10 +58,9 @@ For a complete walkthrough, use
 - Opening the dashboard and changing default passwords.
 - Configuring the Arduino serial port.
 - Reading telemetry through Overview, Telemetry, and Network pages.
-- Uploading Arduino firmware remotely through the Pi.
 - Updating the app from GitHub.
 - Building new Pi packages from source.
-- Troubleshooting common serial, browser, update, and firmware issues.
+- Troubleshooting common serial, browser, and update issues.
 
 ## Raspberry Pi RMS Quick Start
 
@@ -83,16 +82,21 @@ sudo bash install.sh
 The installer creates a `tparc-rms.service` systemd service, starts it on boot,
 and stores configuration in `/etc/tparc-rms/tparc-rms.env`.
 
-Admins can use the Firmware page to compile and upload Arduino sketches to the
-flight controller through the Raspberry Pi USB serial link. The Pi package
-installs the RMS in a private virtual environment and attempts to install
-`arduino-cli` and `avrdude` for firmware uploads.
+The Pi package installs the RMS in a private virtual environment. Arduino
+firmware is kept in the repository under `firmware/` and should be flashed with
+normal Arduino tools outside the RMS.
 
 To update an installed Pi later, extract the newer package and run:
 
 ```bash
 cd tparc-rms-pi-app
 sudo bash update.sh
+```
+To completely remove the RMS from a Pi before a fresh install, run this from an
+extracted package folder:
+
+```bash
+sudo bash uninstall_all.sh
 ```
 
 For automatic GitHub updates, publish the Pi package tarball as a release asset
@@ -116,7 +120,7 @@ Change these credentials from the RMS Settings page before field use. Do not
 expose the RMS to untrusted networks while default credentials are active.
 
 For the step-by-step version of these instructions, including screenshots-to-use
-checkpoints and firmware upload workflow, read
+checkpoints, read
 [docs/STEP_BY_STEP_GUIDE.md](docs/STEP_BY_STEP_GUIDE.md).
 
 ## Local RMS Development
@@ -167,10 +171,10 @@ tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.ya
 
 Last local verification:
 
-- Flight controller `controller_firmware.ino`: `21486` bytes flash,
-  `781` bytes RAM.
-- Calibration wizard `CalibrationWizard.ino`: `21732` bytes flash,
-  `595` bytes RAM.
+- Flight controller `controller_firmware_v2.6.1.ino`: `24878` bytes flash,
+  `929` bytes RAM.
+- Calibration wizard `CalibrationWizard.ino`: `23242` bytes flash,
+  `647` bytes RAM.
 
 ## Documentation
 

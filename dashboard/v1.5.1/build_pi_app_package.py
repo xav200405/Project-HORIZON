@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
 LAUNCHER = APP_DIR / "TP_ARC_RMS_single.py"
 DIST_DIR = ROOT / "dist"
-PACKAGE_VERSION = "2026.06-rev01.11"
+PACKAGE_VERSION = "2026.06-rev01.13"
 
 
 def app_version() -> str:
@@ -31,7 +31,7 @@ def main() -> None:
                 continue
             arcname = Path("tparc-rms-pi-app") / path.relative_to(APP_DIR)
             info = tar.gettarinfo(str(path), str(arcname))
-            if path.name in {"install.sh", "update.sh", "github_update.py", "uninstall.sh", "TP_ARC_RMS_single.py"}:
+            if path.name in {"install.sh", "update.sh", "github_update.py", "uninstall.sh", "uninstall_all.sh", "TP_ARC_RMS_single.py"}:
                 info.mode = 0o755
             with path.open("rb") as handle:
                 tar.addfile(info, handle)

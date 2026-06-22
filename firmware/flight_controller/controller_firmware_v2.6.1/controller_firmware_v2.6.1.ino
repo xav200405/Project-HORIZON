@@ -67,8 +67,8 @@
 
 #define STATUS_LED_PIN 13
 
-#define FIRMWARE_VERSION "FC-0.8.2"
-#define FIRMWARE_REVISION "2026-06-22.1"
+#define FIRMWARE_VERSION "FC-0.8.3"
+#define FIRMWARE_REVISION "2026-06-22.2"
 
 #define ESC1_PIN 6
 #define ESC2_PIN 9
@@ -157,13 +157,19 @@
 //   pitch positive = nose up
 //   yaw   positive = yaw right
 //
-// If roll angle moves opposite in telemetry, flip ROLL_ANGLE_SIGN.
-// If pitch angle moves opposite in telemetry, flip PITCH_ANGLE_SIGN.
+// Current board orientation has MPU roll/pitch axes physically crossed:
+//   sensor pitch channel is aircraft roll
+//   sensor roll channel is aircraft pitch
+// Set this to 0 only if a future board mount restores normal MPU X/Y mapping.
+//
+// If corrected roll angle moves opposite in telemetry, flip ROLL_ANGLE_SIGN.
+// If corrected pitch angle moves opposite in telemetry, flip PITCH_ANGLE_SIGN.
 // If yaw rate moves opposite in telemetry, flip YAW_RATE_SIGN.
 //
 // If the angle displayed is correct but motor correction is backwards,
 // flip MIX_ROLL_SIGN or MIX_PITCH_SIGN instead.
 
+#define SWAP_ROLL_PITCH_AXES 1
 #define ROLL_ANGLE_SIGN   1.0f
 #define PITCH_ANGLE_SIGN  1.0f
 #define YAW_RATE_SIGN     1.0f
@@ -949,22 +955,32 @@ void updateAngles() {
 
   lastImuMicros = now;
 
-  // Default assumed MPU orientation:
-  //   gyro X = roll rate
-  //   gyro Y = pitch rate
-  //   gyro Z = yaw rate
-  //
-  // Flip the sign constants near the top if telemetry is opposite.
-  gyro_roll_rate = ROLL_ANGLE_SIGN * ((float)(gyro_x_raw - cal.gyroOffset[0]) / GYRO_SCALE_500DPS);
-  gyro_pitch_rate = PITCH_ANGLE_SIGN * ((float)(gyro_y_raw - cal.gyroOffset[1]) / GYRO_SCALE_500DPS);
+  float sensorRollRate = (float)(gyro_x_raw - cal.gyroOffset[0]) / GYRO_SCALE_500DPS;
+  float sensorPitchRate = (float)(gyro_y_raw - cal.gyroOffset[1]) / GYRO_SCALE_500DPS;
+
+#if SWAP_ROLL_PITCH_AXES
+  gyro_roll_rate = ROLL_ANGLE_SIGN * sensorPitchRate;
+  gyro_pitch_rate = PITCH_ANGLE_SIGN * sensorRollRate;
+#else
+  gyro_roll_rate = ROLL_ANGLE_SIGN * sensorRollRate;
+  gyro_pitch_rate = PITCH_ANGLE_SIGN * sensorPitchRate;
+#endif
   gyro_yaw_rate = YAW_RATE_SIGN * ((float)(gyro_z_raw - cal.gyroOffset[2]) / GYRO_SCALE_500DPS);
 
   float ax = (float)acc_x_raw / ACC_SCALE_8G;
   float ay = (float)acc_y_raw / ACC_SCALE_8G;
   float az = (float)acc_z_raw / ACC_SCALE_8G;
 
-  float accRoll = ROLL_ANGLE_SIGN * atan2(ay, az) * 57.2957795f;
-  float accPitch = PITCH_ANGLE_SIGN * atan2(-ax, sqrt((ay * ay) + (az * az))) * 57.2957795f;
+  float sensorAccRoll = atan2(ay, az) * 57.2957795f;
+  float sensorAccPitch = atan2(-ax, sqrt((ay * ay) + (az * az))) * 57.2957795f;
+
+#if SWAP_ROLL_PITCH_AXES
+  float accRoll = ROLL_ANGLE_SIGN * sensorAccPitch;
+  float accPitch = PITCH_ANGLE_SIGN * sensorAccRoll;
+#else
+  float accRoll = ROLL_ANGLE_SIGN * sensorAccRoll;
+  float accPitch = PITCH_ANGLE_SIGN * sensorAccPitch;
+#endif
 
   if (firstAngle) {
     angle_roll = accRoll;

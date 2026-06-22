@@ -1,7 +1,11 @@
-# TP-ARC RMS v1.5
+# TP-ARC RMS v1.5 Legacy Package
 
-This folder is a standalone v1.5 Raspberry Pi app drop for the Project HORIZON
-TP-ARC Remote Monitoring System.
+This folder is an older standalone Raspberry Pi app drop for the Project
+HORIZON TP-ARC Remote Monitoring System. It is kept for history only.
+
+Use `dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.13.tar.gz` for the
+current simplified RMS package with remote firmware upload removed and
+`uninstall_all.sh` included.
 
 Use the ready-built archive:
 
@@ -35,4 +39,10 @@ To rebuild the archive from this folder:
 
 ```bash
 python3 build_pi_app_package.py
+```
+
+For a fresh-install reset, extract the current `v1.5.1` package and run:
+
+```bash
+sudo bash uninstall_all.sh
 ```

@@ -45,6 +45,18 @@ TEXT_FIELDS = {
     "REV": "firmware_revision",
 }
 
+PID_ACK_FIELDS = {
+    "KPR": "pid_roll_p",
+    "KIR": "pid_roll_i",
+    "KDR": "pid_roll_d",
+    "KPP": "pid_pitch_p",
+    "KIP": "pid_pitch_i",
+    "KDP": "pid_pitch_d",
+    "KPY": "pid_yaw_p",
+    "KIY": "pid_yaw_i",
+    "KDY": "pid_yaw_d",
+}
+
 JSON_ALIASES = {
     "ms": "controller_ms",
     "heading": "yaw",
@@ -57,6 +69,9 @@ JSON_ALIASES = {
     "rollCmd": "roll_cmd",
     "pitchCmd": "pitch_cmd",
     "yawCmd": "yaw_cmd",
+    "rollSrc": "roll_control_source",
+    "pitchSrc": "pitch_control_source",
+    "yawSrc": "yaw_control_source",
     "rollOut": "pid_roll",
     "pitchOut": "pid_pitch",
     "yawOut": "pid_yaw",
@@ -153,6 +168,9 @@ JSON_TEXT_FIELDS = {
     "compass_status",
     "compass_driver",
     "baro_status",
+    "roll_control_source",
+    "pitch_control_source",
+    "yaw_control_source",
 }
 
 JSON_INT_FIELDS = {
@@ -373,7 +391,21 @@ def parse_telemetry_line(line):
         event["event"] = raw[4:]
         return event
     if raw.startswith("ACK:"):
-        event["ack"] = raw[4:]
+        ack = raw[4:]
+        event["ack"] = ack
+        if ack.startswith("PID,"):
+            event["packet_type"] = "ack"
+            for chunk in ack[4:].split(","):
+                if "=" not in chunk:
+                    continue
+                key, value = chunk.split("=", 1)
+                field = PID_ACK_FIELDS.get(key.strip())
+                if not field:
+                    continue
+                try:
+                    event[field] = float(value)
+                except ValueError:
+                    event[field] = None
         return event
     if raw.startswith("ERR:"):
         event["error"] = raw[4:]
@@ -434,6 +466,9 @@ def default_state():
         "roll_cmd": 0.0,
         "pitch_cmd": 0.0,
         "yaw_cmd": 0.0,
+        "roll_control_source": "",
+        "pitch_control_source": "",
+        "yaw_control_source": "",
         "pid_roll_p": 0.0,
         "pid_roll_i": 0.0,
         "pid_roll_d": 0.0,

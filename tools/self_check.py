@@ -122,6 +122,8 @@ def main():
         ("downsampling", r"function downsample"),
         ("PID UI accepts unrestricted numeric gains", r"Number\.isFinite\(item\.kp\).*Number\.isFinite\(item\.ki\).*Number\.isFinite\(item\.kd\)", re.S),
         ("PID UI sends axis-specific gains", r"data-pid-axis"),
+        ("PID UI updates from ACK packets", r"socket\.on\(\"ack\".*updatePidFromTelemetry", re.S),
+        ("PID UI holds pending values until ACK", r"pendingPidValues.*PID_ACK_GRACE_MS.*pidValuesMatch", re.S),
         ("kill confirmation dialog", r"confirmKill"),
         ("RMS kill UI disabled state", r"RMS kill not commissioned"),
         ("viewer RBAC controls", r"role === \"viewer\""),
@@ -136,6 +138,7 @@ def main():
     dashboard_text = "\n".join(read(path) for path in DASH.rglob("*") if path.is_file() and path.suffix in {".py", ".html", ".js"})
     dashboard_project_checks = [
         ("PID route sends full axis command", r"KPR=.*KIR=.*KDR=.*KPP=.*KIP=.*KDP=.*KPY=.*KIY=.*KDY=", re.S),
+        ("PID route preserves fine tuning precision", r"KPR=\{values\['roll'\]\['kp'\]:\.6f\}"),
         ("RMS kill disabled by default", r"RMS_KILL_ENABLED=os\.environ\.get\(\"TPARC_RMS_KILL_ENABLED\"\)\s*==\s*\"1\""),
         ("RMS kill route guarded", r"if not current_app\.config\[\"RMS_KILL_ENABLED\"\].*RMS_KILL_DISABLED", re.S),
         ("RMS kill disabled template text", r"RMS kill is disabled; use transmitter CH6"),
@@ -155,12 +158,22 @@ def main():
         and require(r"pid_output_roll = \(pid_p_gain_roll \* rollError\)", flight),
     )
     ok &= check(
-        "flight transmitter stick commands rate setpoints",
+        "flight transmitter priority falls back to self-level rate",
         require(r"MAX_ROLL_PITCH_RATE_DPS", flight)
-        and require(r"roll_cmd = \(\(float\)rollStick / 500\.0f\) \* MAX_ROLL_PITCH_RATE_DPS", flight)
-        and require(r"pitch_cmd = \(\(float\)pitchStick / 500\.0f\) \* MAX_ROLL_PITCH_RATE_DPS", flight)
+        and require(r"SELF_LEVEL_RATE_GAIN_DPS_PER_DEG", flight)
+        and require(r"void updateControlAuthority", flight)
+        and require(r"float selectRollPitchRateCommand", flight)
+        and require(r"source = CONTROL_SOURCE_TRANSMITTER.*rateCommandFromStick", flight, re.S)
+        and require(r"source = CONTROL_SOURCE_SELF_LEVEL.*-angleDeg \* SELF_LEVEL_RATE_GAIN_DPS_PER_DEG", flight, re.S)
         and require(r"float rollError = roll_cmd - gyro_roll_rate", flight)
         and require(r"float pitchError = pitch_cmd - gyro_pitch_rate", flight),
+    )
+    ok &= check(
+        "flight emits control arbitration telemetry",
+        require(r"rollSrc", flight)
+        and require(r"pitchSrc", flight)
+        and require(r"yawSrc", flight)
+        and require(r"printControlSourceJsonValue", flight),
     )
     ok &= check(
         "flight transmitter axes use EEPROM calibration for priority",
@@ -222,6 +235,12 @@ def main():
     ok &= check("telemetry parser barometer pressure", parsed_baro["baro_pressure_pa"] == 100125.5)
     ok &= check("telemetry parser barometer hPa", round(parsed_baro["baro_pressure_hpa"], 3) == 1001.255)
     ok &= check("telemetry parser barometer status", parsed_baro["baro_status"] == "OK")
+    parsed_pid_ack = namespace["parse_telemetry_line"](
+        "ACK:PID,KPR=0.450123,KIR=0.000001,KDR=0.010002,KPP=0.460123,KIP=0.000003,KDP=0.020004,KPY=0.500005,KIY=0.000006,KDY=0.000007"
+    )
+    ok &= check("telemetry parser PID ACK roll P", parsed_pid_ack["pid_roll_p"] == 0.450123)
+    ok &= check("telemetry parser PID ACK pitch D", parsed_pid_ack["pid_pitch_d"] == 0.020004)
+    ok &= check("telemetry parser PID ACK yaw D", parsed_pid_ack["pid_yaw_d"] == 0.000007)
     ok &= check("no stale TP_ARC sketch names", "TP_ARC_FlightController" not in all_project_text and "TP_ARC_CalibrationWizard" not in all_project_text)
 
     return 0 if ok else 1

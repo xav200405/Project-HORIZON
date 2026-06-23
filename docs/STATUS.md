@@ -14,7 +14,7 @@ Aviation Research Centre.
 Current flight controller firmware identity:
 
 - Version: `FC-0.8.7`
-- Revision: `2026-06-23.5`
+- Revision: `2026-06-23.7`
 
 Current RMS package identity:
 
@@ -29,7 +29,8 @@ Current RMS package identity:
 - Default battery alarms are now low at 20% SOC, critical at 9% SOC, and emergency at 0% SOC. The dashboard also sounds a repeated battery alarm at low and critical levels.
 - Barometer telemetry is active for BMP280/BME280 at `0x76`: pressure, temperature, absolute altitude estimate, relative altitude, raw readings, status, and chip ID are emitted to the RMS. Altitude hold remains intentionally disabled.
 - Dashboard PID tuning now sends all Roll/Pitch/Yaw gain terms as a full `PID:` serial command. Firmware applies the values live without PID gain range rejection, resets PID integrators, and replies with `ACK:PID,...`.
-- Manual roll/pitch/yaw now use rate-command control: EEPROM-calibrated stick displacement maps linearly to `deg/s` setpoints, then PID tracks gyro rate instead of fighting a self-level angle target.
+- Manual roll/pitch/yaw use priority rate-command control: EEPROM-calibrated stick displacement maps linearly to `deg/s` setpoints, then PID tracks gyro rate. When roll or pitch sticks return to center, the command source automatically falls back to self-level rate commands derived from attitude angle.
+- Flight firmware now uses an explicit control arbitration function before PID runs and emits `rollSrc`, `pitchSrc`, and `yawSrc` telemetry so transmitter/self-level/heading-hold authority can be verified from RMS data.
 - Transmitter roll/pitch/yaw have first priority over automated behavior. Centered-axis control, yaw arm/disarm extremes, and heading-hold release are computed from the EEPROM receiver center/min/max and direction data instead of fixed `1500 us` assumptions.
 - Roll/pitch IMU axes are swapped in firmware for the current board orientation, so physical roll and physical pitch are reported and controlled under the correct names.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.

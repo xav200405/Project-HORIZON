@@ -161,9 +161,9 @@ def pid():
             return {"error": "numeric"}, 400
 
     command = (
-        f"PID:KPR={values['roll']['kp']:.3f},KIR={values['roll']['ki']:.4f},KDR={values['roll']['kd']:.3f},"
-        f"KPP={values['pitch']['kp']:.3f},KIP={values['pitch']['ki']:.4f},KDP={values['pitch']['kd']:.3f},"
-        f"KPY={values['yaw']['kp']:.3f},KIY={values['yaw']['ki']:.4f},KDY={values['yaw']['kd']:.3f}\n"
+        f"PID:KPR={values['roll']['kp']:.6f},KIR={values['roll']['ki']:.6f},KDR={values['roll']['kd']:.6f},"
+        f"KPP={values['pitch']['kp']:.6f},KIP={values['pitch']['ki']:.6f},KDP={values['pitch']['kd']:.6f},"
+        f"KPY={values['yaw']['kp']:.6f},KIY={values['yaw']['ki']:.6f},KDY={values['yaw']['kd']:.6f}\n"
     )
     serial_worker.send(command)
     audit(current_app.config["DATABASE"], session["username"], "PID_CHANGE", {**values, "command": command.strip()}, request.remote_addr)

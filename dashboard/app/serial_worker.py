@@ -117,6 +117,17 @@ class SerialWorker:
             store_telemetry(self.db_path, self.latest_state)
             self.socketio.emit("telemetry", self.latest_state)
         elif "ack" in parsed:
+            pid_fields = {
+                key: value
+                for key, value in parsed.items()
+                if key.startswith("pid_") and value is not None
+            }
+            if pid_fields:
+                self.latest_state.update(pid_fields)
+                self.latest_state["timestamp"] = parsed["timestamp"]
+                self.latest_state["raw"] = line
+                self.latest_state["raw_lines"] = list(self.raw_lines)
+                self.socketio.emit("telemetry", self.latest_state)
             self.socketio.emit("ack", parsed)
         elif "event" in parsed or "error" in parsed:
             self.socketio.emit("flight_event", parsed)

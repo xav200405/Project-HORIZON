@@ -22,6 +22,8 @@ let pidValues = {
   pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
   yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
 };
+let pendingPidValues = null;
+let pendingPidSentAt = 0;
 let lastAnalysis = null;
 let telemetryPacketCount = 0;
 let packetTimes = [];
@@ -45,6 +47,8 @@ const BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE = 0.05;
 const BATTERY_LOW_SOC_PERCENT = 20;
 const BATTERY_CRITICAL_SOC_PERCENT = 9;
 const BATTERY_EMERGENCY_SOC_PERCENT = 0;
+const PID_ACK_GRACE_MS = 3500;
+const PID_MATCH_EPSILON = 0.00001;
 
 const tabs = {
   Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
@@ -70,6 +74,9 @@ const fieldLabels = {
   roll_cmd: "Roll command",
   pitch_cmd: "Pitch command",
   yaw_cmd: "Yaw command",
+  roll_control_source: "Roll control",
+  pitch_control_source: "Pitch control",
+  yaw_control_source: "Yaw control",
   pid_roll: "PID roll output",
   pid_pitch: "PID pitch output",
   pid_yaw: "PID yaw output",
@@ -815,8 +822,8 @@ function updateTelemetry(data) {
   }
   if (currentView === "telemetry") {
     updateSystemState(data);
-    updatePidFromTelemetry(data);
   }
+  updatePidFromTelemetry(data);
   updateNetworkFromTelemetry(data);
   if (currentView === "ops") updateOverviewSummary(data);
   qs("rawData").textContent = (data.raw_lines || [data.raw || ""]).join("\n");
@@ -990,26 +997,56 @@ function updateSystemState(data) {
 }
 
 function updatePidFromTelemetry(data) {
-  if (data.pid_roll_p !== undefined && !pidEdit) {
-    pidValues = {
-      roll: {
-        kp: Number.isFinite(Number(data.pid_roll_p)) ? Number(data.pid_roll_p) : pidValues.roll.kp,
-        ki: Number.isFinite(Number(data.pid_roll_i)) ? Number(data.pid_roll_i) : pidValues.roll.ki,
-        kd: Number.isFinite(Number(data.pid_roll_d)) ? Number(data.pid_roll_d) : pidValues.roll.kd,
-      },
-      pitch: {
-        kp: Number.isFinite(Number(data.pid_pitch_p)) ? Number(data.pid_pitch_p) : pidValues.pitch.kp,
-        ki: Number.isFinite(Number(data.pid_pitch_i)) ? Number(data.pid_pitch_i) : pidValues.pitch.ki,
-        kd: Number.isFinite(Number(data.pid_pitch_d)) ? Number(data.pid_pitch_d) : pidValues.pitch.kd,
-      },
-      yaw: {
-        kp: Number.isFinite(Number(data.pid_yaw_p)) ? Number(data.pid_yaw_p) : pidValues.yaw.kp,
-        ki: Number.isFinite(Number(data.pid_yaw_i)) ? Number(data.pid_yaw_i) : pidValues.yaw.ki,
-        kd: Number.isFinite(Number(data.pid_yaw_d)) ? Number(data.pid_yaw_d) : pidValues.yaw.kd,
-      },
-    };
-    renderPidGrid();
+  if (pidEdit) return;
+
+  const incoming = pidValuesFromPacket(data);
+  if (!incoming) return;
+
+  if (pendingPidValues) {
+    if (pidValuesMatch(incoming, pendingPidValues) || data?.ack?.startsWith("PID")) {
+      pendingPidValues = null;
+      pendingPidSentAt = 0;
+    } else if ((Date.now() - pendingPidSentAt) < PID_ACK_GRACE_MS) {
+      return;
+    } else {
+      pendingPidValues = null;
+      pendingPidSentAt = 0;
+      qs("pidMessage").textContent = "No controller ACK; showing latest telemetry";
+    }
   }
+
+  pidValues = incoming;
+  renderPidGrid();
+}
+
+function pidValuesFromPacket(data) {
+  if (data?.pid_roll_p === undefined) return null;
+  const next = {
+    roll: {
+      kp: Number(data.pid_roll_p),
+      ki: Number(data.pid_roll_i),
+      kd: Number(data.pid_roll_d),
+    },
+    pitch: {
+      kp: Number(data.pid_pitch_p),
+      ki: Number(data.pid_pitch_i),
+      kd: Number(data.pid_pitch_d),
+    },
+    yaw: {
+      kp: Number(data.pid_yaw_p),
+      ki: Number(data.pid_yaw_i),
+      kd: Number(data.pid_yaw_d),
+    },
+  };
+  return pidValuesInRange(next) ? next : null;
+}
+
+function pidValuesMatch(left, right) {
+  return ["roll", "pitch", "yaw"].every(axis =>
+    ["kp", "ki", "kd"].every(term =>
+      Math.abs(Number(left[axis][term]) - Number(right[axis][term])) <= PID_MATCH_EPSILON
+    )
+  );
 }
 
 function updateFieldCatalog(data) {
@@ -1051,10 +1088,15 @@ function renderPidGrid() {
     const key = axis.toLowerCase();
     return `<b>${axis}</b>` + ["kp", "ki", "kd"].map(term => (
       pidEdit
-        ? `<input data-pid-axis="${key}" data-pid-term="${term}" type="number" step="0.001" value="${pidValues[key][term].toFixed(3)}">`
-        : `<span>${pidValues[key][term].toFixed(3)}</span>`
+        ? `<input data-pid-axis="${key}" data-pid-term="${term}" type="number" step="0.001" value="${formatPidValue(pidValues[key][term])}">`
+        : `<span>${formatPidValue(pidValues[key][term])}</span>`
     )).join("");
   }).join("");
+}
+
+function formatPidValue(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number.toFixed(6).replace(/\.?0+$/, "") : "0";
 }
 
 function pidValuesInRange(values) {
@@ -1085,10 +1127,12 @@ function setupControls() {
       qs("pidMessage").textContent = "PID values must be numeric.";
       return;
     }
-    await postJson("/api/pid", values);
-    pidValues = values;
+    const result = await postJson("/api/pid", values);
+    pidValues = result.values || values;
+    pendingPidValues = pidValues;
+    pendingPidSentAt = Date.now();
     pidEdit = false;
-    qs("pidMessage").textContent = "Saved";
+    qs("pidMessage").textContent = "Sent to controller";
     togglePidButtons();
     renderPidGrid();
   };
@@ -1099,10 +1143,12 @@ function setupControls() {
       pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
       yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
     };
-    await postJson("/api/pid", defaults);
-    pidValues = defaults;
+    const result = await postJson("/api/pid", defaults);
+    pidValues = result.values || defaults;
+    pendingPidValues = pidValues;
+    pendingPidSentAt = Date.now();
     pidEdit = false;
-    qs("pidMessage").textContent = "Factory defaults sent";
+    qs("pidMessage").textContent = "Factory defaults sent to controller";
     togglePidButtons();
     renderPidGrid();
   };
@@ -1168,6 +1214,23 @@ socket.on("disconnect", () => {
   refreshNetworkState();
 });
 socket.on("telemetry", updateTelemetry);
+socket.on("ack", data => {
+  if (data?.ack) addNetworkEvent("ACK", data.ack);
+  updatePidFromTelemetry(data || {});
+  if (data?.ack?.startsWith("PID")) qs("pidMessage").textContent = "Controller acknowledged";
+});
+socket.on("flight_event", data => {
+  if (data?.error) {
+    addNetworkEvent("Controller", `ERR:${data.error}`);
+    if (data.error.includes("PID")) {
+      pendingPidValues = null;
+      pendingPidSentAt = 0;
+      qs("pidMessage").textContent = `Controller rejected: ${data.error}`;
+    }
+  } else if (data?.event) {
+    addNetworkEvent("Controller", `EVT:${data.event}`);
+  }
+});
 socket.on("link_status", data => {
   if (data.serial === "lost") {
     addNetworkEvent("Serial", "telemetry link lost");

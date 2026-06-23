@@ -11,7 +11,7 @@ ROOT = Path(__file__).resolve().parent
 APP_DIR = ROOT / "app"
 LAUNCHER = APP_DIR / "TP_ARC_RMS_single.py"
 DIST_DIR = ROOT / "dist"
-PACKAGE_VERSION = "2026.06-rev01.18"
+PACKAGE_VERSION = "2026.06-rev01.20"
 
 
 def app_version() -> str:

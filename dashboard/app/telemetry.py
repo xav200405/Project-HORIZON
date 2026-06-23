@@ -1,6 +1,13 @@
 import json
 import time
 
+BATTERY_EMPTY_SCALE_VOLTAGE = 3.70
+BATTERY_FULL_SCALE_VOLTAGE = 5.00
+BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE = 0.05
+BATTERY_LOW_SOC_PERCENT = 20
+BATTERY_CRITICAL_SOC_PERCENT = 9
+BATTERY_EMERGENCY_SOC_PERCENT = 0
+
 NUMERIC_FIELDS = {
     "R": "roll",
     "P": "pitch",
@@ -130,6 +137,8 @@ JSON_ALIASES = {
     "battValid": "battery_valid",
     "batteryAdc": "battery_adc",
     "batteryADC": "battery_adc",
+    "batteryEmptyScaleVoltage": "battery_empty_scale_voltage",
+    "batteryEmptyScaleV": "battery_empty_scale_voltage",
     "batteryFullScaleVoltage": "battery_full_scale_voltage",
     "batteryFullScaleV": "battery_full_scale_voltage",
     "adc0": "battery_adc",
@@ -217,6 +226,25 @@ def _normalize_throttle(value):
     return max(0.0, min(1.0, (_as_float(value, 1000) - 1000.0) / 1000.0))
 
 
+def _battery_soc_from_voltage(voltage, empty_scale=None, full_scale=None):
+    empty = _as_float(empty_scale, BATTERY_EMPTY_SCALE_VOLTAGE)
+    full = _as_float(full_scale, BATTERY_FULL_SCALE_VOLTAGE)
+    usable_range = full - empty
+    if usable_range <= 0.0:
+        return 0
+    return int(max(0.0, min(100.0, ((voltage - empty) / usable_range) * 100.0)) + 0.5)
+
+
+def _battery_alarm_from_soc(soc):
+    if soc <= BATTERY_EMERGENCY_SOC_PERCENT:
+        return 3
+    if soc <= BATTERY_CRITICAL_SOC_PERCENT:
+        return 2
+    if soc <= BATTERY_LOW_SOC_PERCENT:
+        return 1
+    return 0
+
+
 def _normalize_battery_payload(payload):
     if "battery_monitor_voltage" in payload and "battery_voltage" not in payload:
         payload["battery_voltage"] = payload["battery_monitor_voltage"]
@@ -224,19 +252,32 @@ def _normalize_battery_payload(payload):
         payload["battery_monitor_voltage"] = payload["battery_voltage"]
 
     voltage = _as_float(payload.get("battery_voltage"), 0.0)
-    has_voltage = voltage > 0.0
+    has_voltage = voltage >= BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE
+
+    if "battery_empty_scale_voltage" not in payload:
+        payload["battery_empty_scale_voltage"] = BATTERY_EMPTY_SCALE_VOLTAGE
+    if "battery_full_scale_voltage" not in payload:
+        payload["battery_full_scale_voltage"] = BATTERY_FULL_SCALE_VOLTAGE
 
     if "battery_monitor_enabled" not in payload:
         payload["battery_monitor_enabled"] = 1 if has_voltage else 0
     if "battery_valid" not in payload:
         payload["battery_valid"] = 1 if has_voltage else 0
-    if "battery_alarm" not in payload:
+    packet_includes_alarm = "battery_alarm" in payload
+    if not packet_includes_alarm:
         payload["battery_alarm"] = 0
-    if "battery_soc" not in payload:
-        full_scale = _as_float(payload.get("battery_full_scale_voltage"), 5.0) or 5.0
-        payload["battery_soc"] = int(max(0.0, min(100.0, (voltage / full_scale) * 100.0)) + 0.5) if has_voltage else 0
-    if "battery_full_scale_voltage" not in payload:
-        payload["battery_full_scale_voltage"] = 5.0
+    if has_voltage:
+        payload["battery_soc"] = _battery_soc_from_voltage(
+            voltage,
+            payload.get("battery_empty_scale_voltage"),
+            payload.get("battery_full_scale_voltage"),
+        )
+        payload["battery_alarm"] = max(
+            int(_as_float(payload.get("battery_alarm"), 0)),
+            _battery_alarm_from_soc(payload["battery_soc"]),
+        )
+    elif "battery_soc" not in payload:
+        payload["battery_soc"] = 0
 
 
 def _normalize_baro_payload(payload):
@@ -427,7 +468,8 @@ def default_state():
         "battery_voltage": 0.0,
         "battery_monitor_voltage": 0.0,
         "battery_cell_voltage": 0.0,
-        "battery_full_scale_voltage": 5.0,
+        "battery_empty_scale_voltage": BATTERY_EMPTY_SCALE_VOLTAGE,
+        "battery_full_scale_voltage": BATTERY_FULL_SCALE_VOLTAGE,
         "battery_monitor_enabled": 0,
         "battery_adc": 0,
         "battery_soc": 0,

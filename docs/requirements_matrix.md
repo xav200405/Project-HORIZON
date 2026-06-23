@@ -22,7 +22,7 @@ Source: project prompt supplied during development.
 | Requirement | Implementation |
 |---|---|
 | 0-5V stepped-down monitor signal on A0 | `updateBatteryMonitor()` |
-| A0 monitor voltage, battery percentage, alarm thresholds | `BatteryState`, threshold constants, `handleBatteryCommand()` |
+| A0 monitor voltage, 3.70V-to-5.00V battery percentage, alarm thresholds | `BatteryState`, threshold constants, `estimateBatterySoc()`, `handleBatteryCommand()` |
 | Alarm levels LOW/CRITICAL/EMERGENCY | `classifyBatteryAlarm()` |
 | Telemetry fields for Pi dashboard | `printTelemetryJson()` emits battery fields plus `baroOK`, `baroStatus`, `baroPressurePa`, `baroTempC`, `baroAltitudeM`, and `baroRelativeAltitudeM` |
 | Pi parser and dashboard battery panel | `dashboard/app/telemetry.py`, `dashboard/app/static/js/dashboard.js` |

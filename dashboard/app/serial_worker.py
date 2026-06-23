@@ -3,7 +3,7 @@ import threading
 import time
 
 from .storage import audit, store_telemetry
-from .telemetry import default_state, parse_telemetry_line
+from .telemetry import BATTERY_EMPTY_SCALE_VOLTAGE, BATTERY_FULL_SCALE_VOLTAGE, default_state, parse_telemetry_line
 
 
 class SerialWorker:
@@ -132,10 +132,11 @@ class SerialWorker:
             heading_setpoint=15.0,
             battery_voltage=4.12,
             battery_monitor_voltage=4.12,
-            battery_full_scale_voltage=5.0,
+            battery_empty_scale_voltage=BATTERY_EMPTY_SCALE_VOLTAGE,
+            battery_full_scale_voltage=BATTERY_FULL_SCALE_VOLTAGE,
             battery_cell_voltage=0.0,
             battery_monitor_enabled=1,
-            battery_soc=82,
+            battery_soc=32,
             battery_alarm=0,
             battery_valid=1,
             raw="SIM: no serial port configured",

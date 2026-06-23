@@ -30,7 +30,7 @@ accounts later only when needed.
    Preferred package path in this repo:
 
    ```text
-   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.18.tar.gz
+   dashboard/v1.5.1/dist/tparc-rms-pi-app-2026.06-rev01.20.tar.gz
    ```
 
 2. Open a terminal on the Pi and go to the folder containing the package.
@@ -157,10 +157,17 @@ Use Telemetry for detailed engineering review:
 ### Battery Display
 
 The RMS expects the flight controller to emit battery telemetry from the A0
-stepped-down monitor signal. The dashboard treats 5.00V on A0 as 100%.
+stepped-down monitor signal. The dashboard treats 3.70V on A0 as 0% and
+5.00V as 100%.
 It recognizes `battery_voltage`, `battery_monitor_voltage`, `battery_soc`,
-`battery_percent`, `battery_alarm`, `battery_valid`, and
-`battery_monitor_enabled`.
+`battery_percent`, `battery_empty_scale_voltage`, `battery_full_scale_voltage`,
+`battery_alarm`, `battery_valid`, and `battery_monitor_enabled`.
+
+The default alarm levels are:
+
+- `20%` or lower: low battery warning with a repeated alarm tone.
+- `9%` or lower: critical battery warning with a faster alarm tone.
+- `0%`: emergency battery state.
 
 ### Barometer Display
 

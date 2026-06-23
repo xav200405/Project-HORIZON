@@ -145,8 +145,12 @@ allocation, fixed control-loop periods via `micros()`, `Wire.h` for I2C,
 Current deployment defaults:
 
 - `BATTERY_MONITOR_ENABLED = true` for the verified A0 stepped-down monitor
-  signal. Firmware treats 5.00V on A0 as 100% and emits monitor voltage,
-  battery percentage, alarm level, and validity in JSON telemetry.
+  signal. Firmware treats 3.70V on A0 as 0% and 5.00V as 100%, then emits
+  monitor voltage, battery percentage, alarm level, scale endpoints, and
+  validity in JSON telemetry.
+- Default battery alarm thresholds are low at 20% SOC, critical at 9% SOC,
+  and emergency at 0% SOC. The RMS sounds a repeated battery alarm at low and
+  critical levels.
 - BMP280/BME280 barometer telemetry is active at I2C address `0x76`. Firmware
   emits pressure, temperature, absolute altitude estimate, and relative altitude
   for RMS monitoring only; altitude hold is not enabled.
@@ -173,7 +177,7 @@ tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.ya
 
 Last local verification:
 
-- Flight controller `controller_firmware_v2.6.1.ino`: `30884` bytes flash,
+- Flight controller `controller_firmware_v2.6.1.ino`: `30950` bytes flash,
   `1136` bytes RAM.
 - Calibration wizard `CalibrationWizard.ino`: `22172` bytes flash,
   `595` bytes RAM.

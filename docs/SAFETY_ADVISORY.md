@@ -19,8 +19,8 @@ Use it only if you understand the hardware, software, and operational risks.
 - The RMS emergency kill command is disabled by default. The physical CH6
   transmitter kill switch is the active bring-up safety path.
 - Battery monitoring is enabled for the verified A0 stepped-down monitor
-  signal; confirm 0-5V A0 behavior against a meter before powered aircraft
-  testing.
+  signal; confirm the 3.70V empty-scale and 5.00V full-scale A0 behavior
+  against a meter before powered aircraft testing.
 - Telemetry delays, network failures, browser failures, serial disconnects,
   or Raspberry Pi failures can make the RMS stale or unavailable.
 - Do not operate in public, near people, near property, near airports, or

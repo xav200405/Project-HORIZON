@@ -34,10 +34,17 @@ let lastChartRender = 0;
 let lastFieldCatalogRender = 0;
 let lastLiveTableRender = 0;
 let userSelectedChartTab = false;
+let lastBatteryAlarmToneAt = -Infinity;
 const CHART_FRAME_MS = 150;
 const FIELD_FRAME_MS = 900;
 const TABLE_FRAME_MS = 700;
 const MAX_HISTORY_POINTS = 7200;
+const BATTERY_EMPTY_SCALE_VOLTAGE = 3.70;
+const BATTERY_FULL_SCALE_VOLTAGE = 5.00;
+const BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE = 0.05;
+const BATTERY_LOW_SOC_PERCENT = 20;
+const BATTERY_CRITICAL_SOC_PERCENT = 9;
+const BATTERY_EMERGENCY_SOC_PERCENT = 0;
 
 const tabs = {
   Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
@@ -109,6 +116,7 @@ const fieldLabels = {
   battery_voltage: "A0 voltage",
   battery_monitor_voltage: "A0 voltage",
   battery_cell_voltage: "Legacy battery voltage",
+  battery_empty_scale_voltage: "Battery empty scale",
   battery_full_scale_voltage: "Battery full scale",
   battery_monitor_enabled: "Battery monitor",
   battery_adc: "Battery ADC",
@@ -133,6 +141,7 @@ const fieldUnits = {
   battery_voltage: "V",
   battery_monitor_voltage: "V",
   battery_cell_voltage: "V",
+  battery_empty_scale_voltage: "V",
   battery_full_scale_voltage: "V",
   battery_soc: "%",
   baro_pressure_pa: "Pa",
@@ -441,6 +450,18 @@ function numericValue(value) {
   const number = Number(value);
   return Number.isFinite(number) ? number : null;
 }
+function batterySocFromVoltage(voltage, emptyScale, fullScale) {
+  const usableRange = fullScale - emptyScale;
+  if (!Number.isFinite(voltage) || !Number.isFinite(emptyScale) || !Number.isFinite(fullScale) || usableRange <= 0) return 0;
+  return clamp(((voltage - emptyScale) / usableRange) * 100, 0, 100);
+}
+function batteryAlarmFromSoc(soc) {
+  if (!Number.isFinite(soc)) return 0;
+  if (soc <= BATTERY_EMERGENCY_SOC_PERCENT) return 3;
+  if (soc <= BATTERY_CRITICAL_SOC_PERCENT) return 2;
+  if (soc <= BATTERY_LOW_SOC_PERCENT) return 1;
+  return 0;
+}
 function chartTimestamp(row) {
   const received = Number(row?.received_at);
   if (Number.isFinite(received)) return received;
@@ -453,6 +474,16 @@ function normalizeTelemetryPacket(data) {
   const timestamp = Number(packet.timestamp);
   packet.timestamp = Number.isFinite(timestamp) ? timestamp : receivedAt;
   packet.received_at = receivedAt;
+  const voltage = Number(packet.battery_voltage ?? packet.battery_monitor_voltage);
+  const emptyScale = Number(packet.battery_empty_scale_voltage ?? BATTERY_EMPTY_SCALE_VOLTAGE);
+  const fullScale = Number(packet.battery_full_scale_voltage ?? BATTERY_FULL_SCALE_VOLTAGE);
+  if (!Number.isFinite(Number(packet.battery_empty_scale_voltage))) packet.battery_empty_scale_voltage = BATTERY_EMPTY_SCALE_VOLTAGE;
+  if (!Number.isFinite(Number(packet.battery_full_scale_voltage))) packet.battery_full_scale_voltage = BATTERY_FULL_SCALE_VOLTAGE;
+  if (Number.isFinite(voltage) && voltage >= BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE) {
+    packet.battery_voltage = voltage;
+    if (!Number.isFinite(Number(packet.battery_monitor_voltage))) packet.battery_monitor_voltage = voltage;
+    packet.battery_soc = batterySocFromVoltage(voltage, emptyScale, fullScale);
+  }
   return packet;
 }
 function telemetrySignature(data) {
@@ -593,33 +624,36 @@ function downsample(points) {
 
 function updateBattery(data) {
   const voltage = Number(data.battery_voltage);
-  const fullScale = Number(data.battery_full_scale_voltage ?? 5);
+  const emptyScale = Number(data.battery_empty_scale_voltage ?? BATTERY_EMPTY_SCALE_VOLTAGE);
+  const fullScale = Number(data.battery_full_scale_voltage ?? BATTERY_FULL_SCALE_VOLTAGE);
   const packetFields = Array.isArray(data.fields) ? data.fields.map(field => String(field).toLowerCase()) : [];
   const packetIncludesBattery = packetFields.some(field => field.includes("battery") || field === "vbat" || field === "bv");
-  const calculatedSoc = Number.isFinite(voltage) && voltage > 0 && Number.isFinite(fullScale) && fullScale > 0
-    ? (voltage / fullScale) * 100
+  const usableRange = fullScale - emptyScale;
+  const hasVoltage = Number.isFinite(voltage) && voltage >= BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE;
+  const calculatedSoc = hasVoltage && Number.isFinite(emptyScale) && Number.isFinite(fullScale) && usableRange > 0
+    ? batterySocFromVoltage(voltage, emptyScale, fullScale)
     : 0;
-  const soc = clamp(Number.isFinite(Number(data.battery_soc)) ? Number(data.battery_soc) : calculatedSoc, 0, 100);
+  const soc = calculatedSoc;
   const monitorEnabled = Number(data.battery_monitor_enabled ?? 0) === 1;
-  const hasVoltage = Number.isFinite(voltage) && voltage > 0;
   const valid = Number(data.battery_valid ?? 0) === 1;
-  const alarm = Number(data.battery_alarm ?? 0);
+  const packetAlarm = Number(data.battery_alarm ?? 0);
+  const alarm = hasVoltage ? Math.max(packetAlarm, batteryAlarmFromSoc(soc)) : packetAlarm;
   qs("batteryVoltage").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "No signal";
   qs("cellVoltage").textContent = hasVoltage ? `${fixed(voltage, 2)}V on A0` : "A0 idle";
   qs("batterySoc").textContent = hasVoltage ? `${fixed(soc, 0)}%` : "--";
   const missingTelemetry = packetFields.length > 0 && !packetIncludesBattery && !hasVoltage;
   setText("batteryStatus", hasVoltage
-    ? (valid ? "5.00V = 100%" : "A0 reading outside 0-5V range")
+    ? (valid ? `${fixed(emptyScale, 2)}-${fixed(fullScale, 2)}V scale` : "A0 reading outside safe range")
     : missingTelemetry
       ? "No battery field in latest packet"
       : (monitorEnabled ? "A0 enabled, no voltage" : "Monitor inactive"));
   const fill = qs("socFill");
   fill.style.width = `${hasVoltage ? soc : 0}%`;
-  fill.style.background = !hasVoltage || soc < 20 ? "#bd1e1e" : soc <= 50 ? "#b56b00" : "#138a4b";
+  fill.style.background = !hasVoltage || soc <= BATTERY_CRITICAL_SOC_PERCENT ? "#bd1e1e" : soc <= BATTERY_LOW_SOC_PERCENT ? "#b56b00" : "#138a4b";
   const card = qs("batteryCard");
   card.classList.toggle("battery-warning", hasVoltage && (alarm > 0 || !valid));
   card.style.borderColor = alarm >= 3 ? "#bd1e1e" : alarm >= 1 || (hasVoltage && !valid) ? "#b56b00" : "#d8dee9";
-  if (alarm > 0 && hasVoltage) showBatteryAlert({ ...data, battery_alarm: alarm });
+  if (alarm > 0 && hasVoltage) showBatteryAlert({ ...data, battery_alarm: alarm, battery_soc: soc });
 }
 
 function updateBarometer(data) {
@@ -650,20 +684,53 @@ function showBatteryAlert(data) {
   banner.classList.remove("hidden");
   banner.style.background = data.battery_alarm >= 2 ? "#bd1e1e" : "#b56b00";
   qs("alertTitle").textContent = `Battery ${names[data.battery_alarm]}`;
-  qs("alertMessage").textContent = `${fixed(data.battery_soc, 0)}% battery, ${fixed(data.battery_voltage, 2)}V on A0. Land and inspect power system.`;
+  qs("alertMessage").textContent = data.battery_alarm >= 2
+    ? `${fixed(data.battery_soc, 0)}% battery, ${fixed(data.battery_voltage, 2)}V on A0. Critically low battery. Land immediately.`
+    : `${fixed(data.battery_soc, 0)}% battery, ${fixed(data.battery_voltage, 2)}V on A0. Low battery warning. Prepare to land.`;
   qs("dismissAlert").style.display = data.battery_alarm === 1 ? "inline-block" : "none";
-  if (data.battery_alarm >= 2) beep();
+  playBatteryAlarm(data.battery_alarm);
 }
 
-function beep() {
+function playBatteryAlarm(level) {
+  const now = performance.now();
+  const minGap = level >= 2 ? 2500 : 6000;
+  if (now - lastBatteryAlarmToneAt < minGap) return;
+  lastBatteryAlarmToneAt = now;
+
   const AudioContext = window.AudioContext || window.webkitAudioContext;
   if (!AudioContext) return;
   const ctx = new AudioContext();
-  const osc = ctx.createOscillator();
-  osc.frequency.value = 880;
-  osc.connect(ctx.destination);
-  osc.start();
-  setTimeout(() => { osc.stop(); ctx.close(); }, 120);
+  const pattern = level >= 2
+    ? [1040, 760, 1040, 760, 1040, 760]
+    : [820, 820, 820];
+  const pulseSeconds = level >= 2 ? 0.16 : 0.18;
+  const gapSeconds = level >= 2 ? 0.08 : 0.12;
+  const master = ctx.createGain();
+  master.gain.value = level >= 2 ? 0.18 : 0.13;
+  master.connect(ctx.destination);
+
+  pattern.forEach((frequency, index) => {
+    const start = ctx.currentTime + index * (pulseSeconds + gapSeconds);
+    const stop = start + pulseSeconds;
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = "square";
+    osc.frequency.value = frequency;
+    gain.gain.setValueAtTime(0.001, start);
+    gain.gain.exponentialRampToValueAtTime(1.0, start + 0.015);
+    gain.gain.exponentialRampToValueAtTime(0.001, stop);
+    osc.connect(gain);
+    gain.connect(master);
+    osc.start(start);
+    osc.stop(stop + 0.02);
+  });
+
+  const totalMs = (pattern.length * (pulseSeconds + gapSeconds) + 0.2) * 1000;
+  setTimeout(() => ctx.close(), totalMs);
+}
+
+function beep() {
+  playBatteryAlarm(1);
 }
 
 function updateMotors(data) {
@@ -782,7 +849,7 @@ function updateLiveTelemetryTable(data) {
   if (!table) return;
   const priority = [
     "timestamp", "packet_type", "controller_ms", "state", "mode", "armed", "lockout",
-    "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "battery_adc",
+    "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_empty_scale_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "battery_adc",
     "baro_ok", "baro_status", "baro_pressure_hpa", "baro_pressure_pa", "baro_temperature_c", "baro_altitude_m", "baro_relative_altitude_m", "baro_raw_pressure", "baro_baseline_raw",
     "roll", "pitch", "yaw", "heading", "heading_setpoint", "heading_error", "heading_lock",
     "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "roll_cmd", "pitch_cmd", "yaw_cmd",
@@ -864,7 +931,7 @@ async function hydrateRecentTelemetry() {
       .filter(row => Number.isFinite(Number(row.timestamp)) && Number(row.timestamp) > lastStateTimestamp)
       .slice(-MAX_HISTORY_POINTS);
     if (!freshRows.length) return;
-    freshRows.slice(0, -1).forEach(row => history.push(row));
+    freshRows.slice(0, -1).forEach(row => history.push(normalizeTelemetryPacket(row)));
     while (history.length > MAX_HISTORY_POINTS) history.shift();
     const latest = freshRows[freshRows.length - 1];
     lastStateTimestamp = Number(latest.timestamp);
@@ -947,7 +1014,7 @@ function updatePidFromTelemetry(data) {
 
 function updateFieldCatalog(data) {
   const priority = [
-    "state", "mode", "armed", "lockout", "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "roll", "pitch", "yaw", "heading_error",
+    "state", "mode", "armed", "lockout", "battery_monitor_enabled", "battery_soc", "battery_voltage", "battery_monitor_voltage", "battery_empty_scale_voltage", "battery_full_scale_voltage", "battery_alarm", "battery_valid", "roll", "pitch", "yaw", "heading_error",
     "gyro_roll_rate", "gyro_pitch_rate", "gyro_yaw_rate", "m1", "m2", "m3", "m4",
     "ch1", "ch2", "ch3", "ch4", "ch5", "ch6", "compass_status", "loop_overrun",
   ];

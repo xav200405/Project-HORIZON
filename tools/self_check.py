@@ -113,6 +113,9 @@ def main():
         ("series toggles", r"enabledSeries"),
         ("barometer chart tab", r"Barometer:"),
         ("barometer RMS display", r"function updateBarometer"),
+        ("battery uses usable voltage window", r"BATTERY_EMPTY_SCALE_VOLTAGE\s*=\s*3\.70.*batterySocFromVoltage", re.S),
+        ("battery low alarm tone", r"BATTERY_LOW_SOC_PERCENT\s*=\s*20.*playBatteryAlarm", re.S),
+        ("battery critical alarm tone", r"BATTERY_CRITICAL_SOC_PERCENT\s*=\s*9.*Critically low battery", re.S),
         ("chart auto-selects populated telemetry tab", r"function bestTelemetryTab"),
         ("chart distinguishes empty tab from no telemetry", r"Telemetry received; no .* samples in this window"),
         ("API fallback allows changed stable-timestamp telemetry", r"lastFallbackSignature"),
@@ -142,6 +145,17 @@ def main():
         ok &= check(name, require(pattern, dashboard_text, flags[0] if flags else 0))
 
     ok &= check("flight handles full PID command", require(r"void handlePidCommand", flight) and require(r"ACK:PID,KPR=", flight))
+    ok &= check(
+        "flight battery SOC uses 3.70V empty scale",
+        require(r"BATTERY_PERCENT_EMPTY_V\s+3\.70f", flight)
+        and require(r"monitorVoltage\s*-\s*BATTERY_PERCENT_EMPTY_V", flight),
+    )
+    ok &= check(
+        "flight battery alarm defaults are 20/9/0",
+        require(r"BATTERY_DEFAULT_LOW_PERCENT\s+20\.0f", flight)
+        and require(r"BATTERY_DEFAULT_CRITICAL_PERCENT\s+9\.0f", flight)
+        and require(r"BATTERY_DEFAULT_EMERGENCY_PERCENT\s+0\.0f", flight),
+    )
 
     for py_file in py_files:
         try:
@@ -163,6 +177,16 @@ def main():
     ok &= check("telemetry parser heading mode", parsed["heading_mode"] == "HOLD")
     ok &= check("telemetry parser firmware version", parsed["firmware_version"] == "FC-0.8.1")
     ok &= check("telemetry parser firmware revision", parsed["firmware_revision"] == "2026-06-19.1")
+    parsed_empty_battery = namespace["parse_telemetry_line"]("TEL:BV=3.70,BSOC=74,BVALID=1")
+    parsed_mid_battery = namespace["parse_telemetry_line"]("TEL:BV=4.35,BVALID=1")
+    parsed_full_battery = namespace["parse_telemetry_line"]("TEL:BV=5.00,BVALID=1")
+    ok &= check("telemetry parser battery 3.70V is empty", parsed_empty_battery["battery_soc"] == 0)
+    ok &= check("telemetry parser battery midpoint is half", parsed_mid_battery["battery_soc"] == 50)
+    ok &= check("telemetry parser battery 5.00V is full", parsed_full_battery["battery_soc"] == 100)
+    parsed_low_battery = namespace["parse_telemetry_line"]("TEL:BV=3.96,BVALID=1")
+    parsed_critical_battery = namespace["parse_telemetry_line"]("TEL:BV=3.81,BVALID=1")
+    ok &= check("telemetry parser battery low alarm at 20 percent", parsed_low_battery["battery_alarm"] == 1)
+    ok &= check("telemetry parser battery critical alarm at 9 percent", parsed_critical_battery["battery_alarm"] == 2)
     parsed_baro = namespace["parse_telemetry_line"](
         '{"ms":101,"baroOK":1,"baroStatus":"OK","baroPressurePa":100125.5,'
         '"baroTempC":28.25,"baroAltitudeM":10.2,"baroRelativeAltitudeM":1.4,'

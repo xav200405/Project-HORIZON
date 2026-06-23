@@ -68,8 +68,8 @@
 
 #define STATUS_LED_PIN 13
 
-#define FIRMWARE_VERSION "FC-0.8.5"
-#define FIRMWARE_REVISION "2026-06-22.4"
+#define FIRMWARE_VERSION "FC-0.8.7"
+#define FIRMWARE_REVISION "2026-06-23.2"
 
 #define ESC1_PIN 6
 #define ESC2_PIN 9
@@ -142,13 +142,14 @@
 #define BATTERY_SAMPLE_INTERVAL_MS 100UL
 #define BATTERY_ADC_REFERENCE_V 5.0f
 #define BATTERY_ADC_MAX_COUNTS 1023.0f
-#define BATTERY_PERCENT_FULL_V 5.0f   // A0 monitor voltage that represents 100%.
+#define BATTERY_PERCENT_EMPTY_V 3.70f // A0 monitor voltage that represents 0%.
+#define BATTERY_PERCENT_FULL_V 5.00f  // A0 monitor voltage that represents 100%.
 #define BATTERY_FILTER_ALPHA 0.15f
-#define BATTERY_MIN_VALID_V 0.0f
+#define BATTERY_MIN_VALID_V 0.05f
 #define BATTERY_MAX_VALID_V 5.05f
-#define BATTERY_DEFAULT_LOW_PERCENT 30.0f
-#define BATTERY_DEFAULT_CRITICAL_PERCENT 20.0f
-#define BATTERY_DEFAULT_EMERGENCY_PERCENT 10.0f
+#define BATTERY_DEFAULT_LOW_PERCENT 20.0f
+#define BATTERY_DEFAULT_CRITICAL_PERCENT 9.0f
+#define BATTERY_DEFAULT_EMERGENCY_PERCENT 0.0f
 
 // ================================================================
 // CONFIGURABLE AXIS/MIXER SIGNS
@@ -1568,7 +1569,10 @@ void updateHeadingHoldFromYawStick(int16_t yawStick) {
 // ================================================================
 
 uint8_t estimateBatterySoc(float monitorVoltage) {
-  float percent = (monitorVoltage / BATTERY_PERCENT_FULL_V) * 100.0f;
+  float usableRange = BATTERY_PERCENT_FULL_V - BATTERY_PERCENT_EMPTY_V;
+  if (usableRange <= 0.0f) return 0;
+
+  float percent = ((monitorVoltage - BATTERY_PERCENT_EMPTY_V) / usableRange) * 100.0f;
   percent = constrainFloat(percent, 0.0f, 100.0f);
   return (uint8_t)(percent + 0.5f);
 }
@@ -2291,6 +2295,8 @@ void printTelemetryJson() {
   Serial.print((int)battery.alarm);
   Serial.print(F(",\"battery_valid\":"));
   Serial.print(battery.valid ? 1 : 0);
+  Serial.print(F(",\"battery_empty_scale_voltage\":"));
+  Serial.print(BATTERY_PERCENT_EMPTY_V, 2);
   Serial.print(F(",\"battery_full_scale_voltage\":"));
   Serial.print(BATTERY_PERCENT_FULL_V, 2);
   Serial.print(F(",\"battery_low_threshold\":"));

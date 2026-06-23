@@ -18,8 +18,8 @@ let live = true;
 let sessionStart = Date.now();
 let pidEdit = false;
 let pidValues = {
-  roll: { kp: 4.000, ki: 0.020, kd: 0.050 },
-  pitch: { kp: 4.000, ki: 0.020, kd: 0.050 },
+  roll: { kp: 0.450, ki: 0.000, kd: 0.010 },
+  pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
   yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
 };
 let lastAnalysis = null;
@@ -45,7 +45,6 @@ const BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE = 0.05;
 const BATTERY_LOW_SOC_PERCENT = 20;
 const BATTERY_CRITICAL_SOC_PERCENT = 9;
 const BATTERY_EMERGENCY_SOC_PERCENT = 0;
-const PID_LIMITS = { kp: 10, ki: 1, kd: 50 };
 
 const tabs = {
   Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
@@ -136,8 +135,8 @@ const fieldUnits = {
   gyro_roll_rate: "deg/s",
   gyro_pitch_rate: "deg/s",
   gyro_yaw_rate: "deg/s",
-  roll_cmd: "deg",
-  pitch_cmd: "deg",
+  roll_cmd: "deg/s",
+  pitch_cmd: "deg/s",
   yaw_cmd: "deg/s",
   battery_voltage: "V",
   battery_monitor_voltage: "V",
@@ -1061,9 +1060,9 @@ function renderPidGrid() {
 function pidValuesInRange(values) {
   return ["roll", "pitch", "yaw"].every(axis => {
     const item = values[axis] || {};
-    return item.kp >= 0 && item.kp <= PID_LIMITS.kp &&
-      item.ki >= 0 && item.ki <= PID_LIMITS.ki &&
-      item.kd >= 0 && item.kd <= PID_LIMITS.kd;
+    return Number.isFinite(item.kp) &&
+      Number.isFinite(item.ki) &&
+      Number.isFinite(item.kd);
   });
 }
 
@@ -1083,7 +1082,7 @@ function setupControls() {
       values[input.dataset.pidAxis][input.dataset.pidTerm] = Number(input.value);
     });
     if (!pidValuesInRange(values)) {
-      qs("pidMessage").textContent = "PID values outside safe range.";
+      qs("pidMessage").textContent = "PID values must be numeric.";
       return;
     }
     await postJson("/api/pid", values);
@@ -1096,8 +1095,8 @@ function setupControls() {
   qs("resetPid").onclick = async () => {
     if (!confirm("Reset all PID gains to factory defaults? This will send new values to the UAV.")) return;
     const defaults = {
-      roll: { kp: 4.000, ki: 0.020, kd: 0.050 },
-      pitch: { kp: 4.000, ki: 0.020, kd: 0.050 },
+      roll: { kp: 0.450, ki: 0.000, kd: 0.010 },
+      pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
       yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
     };
     await postJson("/api/pid", defaults);

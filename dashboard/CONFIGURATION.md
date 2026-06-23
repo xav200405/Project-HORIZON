@@ -116,8 +116,8 @@ These are the fields the RMS understands best. Future UAV firmware should keep t
 | `heading_setpoint` | `headTarget` | Heading-hold target in degrees. |
 | `heading_error` | `headErr` | Heading error in degrees. |
 | `heading_lock` | `headLock` | Heading lock active flag. |
-| `roll_cmd` | `rollCmd` | Roll command in degrees. |
-| `pitch_cmd` | `pitchCmd` | Pitch command in degrees. |
+| `roll_cmd` | `rollCmd` | Roll-rate command in deg/s. |
+| `pitch_cmd` | `pitchCmd` | Pitch-rate command in deg/s. |
 | `yaw_cmd` | `yawCmd` | Yaw-rate command in deg/s. |
 | `pid_roll` | `rollOut` | Roll PID output. |
 | `pid_pitch` | `pitchOut` | Pitch PID output. |

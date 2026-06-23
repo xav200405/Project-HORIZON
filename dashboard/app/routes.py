@@ -1,4 +1,5 @@
 import json
+import math
 import sqlite3
 import time
 
@@ -156,8 +157,8 @@ def pid():
         values = {axis: dict(legacy) for axis in axes}
 
     for axis_values in values.values():
-        if not (0 <= axis_values["kp"] <= 10 and 0 <= axis_values["ki"] <= 1 and 0 <= axis_values["kd"] <= 50):
-            return {"error": "range"}, 400
+        if not all(math.isfinite(axis_values[key]) for key in ("kp", "ki", "kd")):
+            return {"error": "numeric"}, 400
 
     command = (
         f"PID:KPR={values['roll']['kp']:.3f},KIR={values['roll']['ki']:.4f},KDR={values['roll']['kd']:.3f},"

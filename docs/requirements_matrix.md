@@ -11,7 +11,7 @@ Source: project prompt supplied during development.
 | 250 Hz ESC/control loop with lower-rate compass, barometer, battery, and telemetry tasks | `LOOP_TIME_US`, `COMPASS_UPDATE_INTERVAL_MS`, `BARO_UPDATE_INTERVAL_MS`, `BATTERY_SAMPLE_INTERVAL_MS`, `TELEMETRY_INTERVAL_MS`, `loop()` |
 | Complementary roll/pitch filter with MPU roll/pitch axis swap for current board orientation | `updateAngles()`, `SWAP_ROLL_PITCH_AXES` |
 | Compass heading readout and heading-hold/command state machine | `updateCompass()`, `updateHeadingHoldFromYawStick()` |
-| PID with saturation and anti-windup | `calculate_pid()`, `MAX_PID_OUTPUT`, `constrainFloat()` |
+| Manual rate PID with unrestricted PID tuning | `calculate_pid()`, `handlePidCommand()` |
 | RC capture, normalization, deadbands, arming/disarming holds | `processRxEdge()`, `copyAndCalibrateReceiver()`, `check_safety_and_arming()` |
 | Failsafe on RC loss, sensor health, CH6 physical lockout, and battery emergency/invalid state | `check_safety_and_arming()`, `emergencyLockoutActive`, `batteryFailsafeActive` |
 | Serial telemetry and command handling | `printTelemetryJson()`, `handleTelemetry()`, `handleSerialTuning()` |

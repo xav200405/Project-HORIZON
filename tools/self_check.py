@@ -120,7 +120,7 @@ def main():
         ("chart distinguishes empty tab from no telemetry", r"Telemetry received; no .* samples in this window"),
         ("API fallback allows changed stable-timestamp telemetry", r"lastFallbackSignature"),
         ("downsampling", r"function downsample"),
-        ("PID range validation", r"item\.kp >= 0.*item\.kp <= PID_LIMITS\.kp.*item\.ki >= 0.*item\.ki <= PID_LIMITS\.ki.*item\.kd >= 0.*item\.kd <= PID_LIMITS\.kd", re.S),
+        ("PID UI accepts unrestricted numeric gains", r"Number\.isFinite\(item\.kp\).*Number\.isFinite\(item\.ki\).*Number\.isFinite\(item\.kd\)", re.S),
         ("PID UI sends axis-specific gains", r"data-pid-axis"),
         ("kill confirmation dialog", r"confirmKill"),
         ("RMS kill UI disabled state", r"RMS kill not commissioned"),
@@ -146,11 +146,31 @@ def main():
 
     ok &= check("flight handles full PID command", require(r"void handlePidCommand", flight) and require(r"ACK:PID,KPR=", flight))
     ok &= check(
-        "flight PID command range matches live tuning range",
-        require(r"PID_P_GAIN_MAX\s+10\.0f", flight)
-        and require(r"PID_I_GAIN_MAX\s+1\.0f", flight)
-        and require(r"PID_D_GAIN_MAX\s+50\.0f", flight)
-        and require(r"pidCommandValuesValid.*PID_P_GAIN_MAX.*PID_I_GAIN_MAX.*PID_D_GAIN_MAX", flight, re.S),
+        "flight PID tuning has no firmware gain or output clamps",
+        "pidCommandValuesValid" not in flight
+        and "ERR:PID_RANGE" not in flight
+        and "MAX_PID_OUTPUT" not in flight
+        and "MAX_YAW_OUTPUT" not in flight
+        and require(r"pid_i_mem_roll \+= pid_i_gain_roll \* rollError \* dt", flight)
+        and require(r"pid_output_roll = \(pid_p_gain_roll \* rollError\)", flight),
+    )
+    ok &= check(
+        "flight transmitter stick commands rate setpoints",
+        require(r"MAX_ROLL_PITCH_RATE_DPS", flight)
+        and require(r"roll_cmd = \(\(float\)rollStick / 500\.0f\) \* MAX_ROLL_PITCH_RATE_DPS", flight)
+        and require(r"pitch_cmd = \(\(float\)pitchStick / 500\.0f\) \* MAX_ROLL_PITCH_RATE_DPS", flight)
+        and require(r"float rollError = roll_cmd - gyro_roll_rate", flight)
+        and require(r"float pitchError = pitch_cmd - gyro_pitch_rate", flight),
+    )
+    ok &= check(
+        "flight transmitter axes use EEPROM calibration for priority",
+        require(r"uint16_t rxRaw\[6\]", flight)
+        and require(r"int16_t transmitterAxisFromEEPROM", flight)
+        and require(r"cal\.rxMin\[channelIndex\].*cal\.rxCenter\[channelIndex\].*cal\.rxMax\[channelIndex\]", flight, re.S)
+        and require(r"rollStick\s*=\s*transmitterAxisFromEEPROM\(CH_ROLL\)", flight)
+        and require(r"pitchStick\s*=\s*transmitterAxisFromEEPROM\(CH_PITCH\)", flight)
+        and require(r"yawStick\s*=\s*transmitterAxisFromEEPROM\(CH_YAW\)", flight)
+        and require(r"if \(yawStick != 0\).*heading_lock_active = false", flight, re.S),
     )
     ok &= check(
         "flight battery SOC uses 3.70V empty scale",

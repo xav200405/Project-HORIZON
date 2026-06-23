@@ -14,7 +14,7 @@ Aviation Research Centre.
 Current flight controller firmware identity:
 
 - Version: `FC-0.8.7`
-- Revision: `2026-06-23.3`
+- Revision: `2026-06-23.5`
 
 Current RMS package identity:
 
@@ -28,8 +28,9 @@ Current RMS package identity:
 - Battery telemetry now reports A0 monitor voltage, percentage where 3.70V is 0% and 5.00V is 100%, alarm level, validity, scale endpoints, and active percentage thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
 - Default battery alarms are now low at 20% SOC, critical at 9% SOC, and emergency at 0% SOC. The dashboard also sounds a repeated battery alarm at low and critical levels.
 - Barometer telemetry is active for BMP280/BME280 at `0x76`: pressure, temperature, absolute altitude estimate, relative altitude, raw readings, status, and chip ID are emitted to the RMS. Altitude hold remains intentionally disabled.
-- Dashboard PID tuning now sends all Roll/Pitch/Yaw gain terms as a full `PID:` serial command. Firmware applies the values live, resets PID integrators, and replies with `ACK:PID,...`.
-- Roll/pitch factory PID gains are now bench-visible (`Kp=4.0`) and the dashboard/API PID range matches the firmware's live serial tuning range (`Kp <= 10`, `Ki <= 1`, `Kd <= 50`).
+- Dashboard PID tuning now sends all Roll/Pitch/Yaw gain terms as a full `PID:` serial command. Firmware applies the values live without PID gain range rejection, resets PID integrators, and replies with `ACK:PID,...`.
+- Manual roll/pitch/yaw now use rate-command control: EEPROM-calibrated stick displacement maps linearly to `deg/s` setpoints, then PID tracks gyro rate instead of fighting a self-level angle target.
+- Transmitter roll/pitch/yaw have first priority over automated behavior. Centered-axis control, yaw arm/disarm extremes, and heading-hold release are computed from the EEPROM receiver center/min/max and direction data instead of fixed `1500 us` assumptions.
 - Roll/pitch IMU axes are swapped in firmware for the current board orientation, so physical roll and physical pitch are reported and controlled under the correct names.
 - `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.

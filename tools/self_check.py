@@ -10,12 +10,12 @@ JS = DASH / "static" / "js" / "dashboard.js"
 
 
 def active_flight_sketch():
-    preferred = ROOT / "firmware" / "flight_controller" / "controller_firmware_v2.6.1" / "controller_firmware_v2.6.1.ino"
+    preferred = ROOT / "firmware" / "flight_controller" / "controller_firmware_v2.6.ino"
     if preferred.exists():
         return preferred
     flight_root = ROOT / "firmware" / "flight_controller"
     candidates = sorted(
-        flight_root.glob("*/**/*.ino"),
+        flight_root.glob("**/*.ino"),
         key=lambda path: (path.parent.name != path.stem, str(path)),
     )
     return candidates[0] if candidates else flight_root / "controller_firmware" / "controller_firmware.ino"
@@ -43,7 +43,11 @@ def main():
 
     ok &= check("flight firmware file exists", FLIGHT.exists(), str(FLIGHT))
     ok &= check("calibration wizard file exists", CAL.exists(), str(CAL))
-    ok &= check("flight sketch folder matches file name", FLIGHT.parent.name == FLIGHT.stem)
+    ok &= check(
+        "flight sketch path is recognized",
+        FLIGHT.parent.name == FLIGHT.stem or FLIGHT == ROOT / "firmware" / "flight_controller" / "controller_firmware_v2.6.ino",
+        str(FLIGHT),
+    )
     ok &= check("calibration sketch folder matches file name", CAL.parent.name == CAL.stem)
     if not ok:
         return 1
@@ -66,7 +70,7 @@ def main():
 
     flight_checks = [
         ("flight source is YMFC safety baseline", r"YMFC Flight Controller"),
-        ("flight source version marker", r"Safety Baseline V6\.6C_QMC5883P_COMPASS"),
+        ("flight source version marker", r"YMFC Flight Controller - Arduino Uno Safety Baseline"),
         ("flight uses Wire", r"#include\s+<Wire\.h>"),
         ("flight uses EEPROM", r"#include\s+<EEPROM\.h>"),
         ("flight uses math helpers", r"#include\s+<math\.h>"),
@@ -78,14 +82,24 @@ def main():
         ("flight latest PCB lockout pin D12", r"CH6 Lockout\s*=\s*D12"),
         ("flight has receiver failsafe", r"failsafe"),
         ("flight has serial telemetry", r"telemetry", re.I),
-        ("flight has QMC5883P compass support", r"QMC5883P"),
         ("flight has MPU6050 support", r"MPU6050"),
-        ("flight has BMP280 telemetry support", r"setupBarometer|BARO_UPDATE_INTERVAL_MS"),
-        ("flight emits barometer telemetry", r"baroPressurePa.*baroRelativeAltitudeM", re.S),
+        ("flight has proportional heading hold", r"HEADING_HOLD_P_GAIN|HEADING_HOLD_MAX_RATE_DPS|headingHoldRateFromError|updateHeadingHoldFromYawStick", re.S),
+        ("flight core build removes barometer task", r"setupBarometer|updateBarometer|BARO_UPDATE_INTERVAL_MS|baroPressurePa", re.S),
     ]
     for item in flight_checks:
         name, pattern, *flags = item
-        ok &= check(name, require(pattern, flight, flags[0] if flags else 0))
+        condition = require(pattern, flight, flags[0] if flags else 0)
+        if name == "flight has proportional heading hold":
+            condition = all(token in flight for token in (
+                "HEADING_HOLD_P_GAIN",
+                "HEADING_HOLD_MAX_RATE_DPS",
+                "headingHoldRateFromError",
+                "updateCompass",
+                "updateHeadingHoldFromYawStick",
+            ))
+        if "removes" in name:
+            condition = not condition
+        ok &= check(name, condition)
 
     cal_checks = [
         ("calibration source is setup module v6.5", r"Setup Module v6\.5 CPP FIXED"),
@@ -147,54 +161,73 @@ def main():
         name, pattern, *flags = item
         ok &= check(name, require(pattern, dashboard_text, flags[0] if flags else 0))
 
-    ok &= check("flight handles full PID command", require(r"void handlePidCommand", flight) and require(r"ACK:PID,KPR=", flight))
     ok &= check(
-        "flight PID tuning has no firmware gain or output clamps",
+        "flight handles v2.6 incremental PID tuning",
+        require(r"void handleSerialTuning", flight)
+        and require(r"void adjustGain", flight)
+        and require(r"PID_TUNE_STEP\s+0\.01f", flight)
+        and require(r"case 'r': adjustGain\(pid_p_gain_roll", flight)
+        and require(r"case 'Y': adjustGain\(pid_d_gain_yaw", flight)
+        and require(r"void printGains", flight),
+    )
+    ok &= check(
+        "flight PID tuning has no firmware gain-range rejection",
         "pidCommandValuesValid" not in flight
         and "ERR:PID_RANGE" not in flight
-        and "MAX_PID_OUTPUT" not in flight
-        and "MAX_YAW_OUTPUT" not in flight
-        and require(r"pid_i_mem_roll \+= pid_i_gain_roll \* rollError \* dt", flight)
-        and require(r"pid_output_roll = \(pid_p_gain_roll \* rollError\)", flight),
     )
     ok &= check(
-        "flight transmitter priority falls back to self-level rate",
-        require(r"MAX_ROLL_PITCH_RATE_DPS", flight)
-        and require(r"SELF_LEVEL_RATE_GAIN_DPS_PER_DEG", flight)
-        and require(r"void updateControlAuthority", flight)
-        and require(r"float selectRollPitchRateCommand", flight)
-        and require(r"source = CONTROL_SOURCE_TRANSMITTER.*rateCommandFromStick", flight, re.S)
-        and require(r"source = CONTROL_SOURCE_SELF_LEVEL.*-angleDeg \* SELF_LEVEL_RATE_GAIN_DPS_PER_DEG", flight, re.S)
-        and require(r"float rollError = roll_cmd - gyro_roll_rate", flight)
-        and require(r"float pitchError = pitch_cmd - gyro_pitch_rate", flight),
+        "flight restored angle self-level roll/pitch control",
+        require(r"MAX_ANGLE_DEG", flight)
+        and require(r"MAX_PID_OUTPUT", flight)
+        and require(r"MAX_YAW_OUTPUT", flight)
+        and require(r"roll_cmd = pilotStickCurve\(rollStick\) \* MAX_ANGLE_DEG", flight)
+        and require(r"pitch_cmd = pilotStickCurve\(pitchStick\) \* MAX_ANGLE_DEG", flight)
+        and require(r"float rollError = roll_cmd - angle_roll", flight)
+        and require(r"float pitchError = pitch_cmd - angle_pitch", flight)
+        and require(r"pid_i_mem_roll = constrainFloat\(pid_i_mem_roll, -MAX_LEVEL_I_OUTPUT, MAX_LEVEL_I_OUTPUT\)", flight)
+        and require(r"pid_output_roll = constrainFloat\(pid_output_roll, -MAX_PID_OUTPUT, MAX_PID_OUTPUT\)", flight),
     )
     ok &= check(
-        "flight emits control arbitration telemetry",
-        require(r"rollSrc", flight)
-        and require(r"pitchSrc", flight)
-        and require(r"yawSrc", flight)
-        and require(r"printControlSourceJsonValue", flight),
-    )
-    ok &= check(
-        "flight transmitter axes use EEPROM calibration for priority",
-        require(r"uint16_t rxRaw\[6\]", flight)
-        and require(r"int16_t transmitterAxisFromEEPROM", flight)
+        "flight transmitter axes use EEPROM calibration",
+        require(r"uint16_t calibrateReceiverPulse", flight)
+        and require(r"uint16_t calibrateCenteredAxis", flight)
         and require(r"cal\.rxMin\[channelIndex\].*cal\.rxCenter\[channelIndex\].*cal\.rxMax\[channelIndex\]", flight, re.S)
-        and require(r"rollStick\s*=\s*transmitterAxisFromEEPROM\(CH_ROLL\)", flight)
-        and require(r"pitchStick\s*=\s*transmitterAxisFromEEPROM\(CH_PITCH\)", flight)
-        and require(r"yawStick\s*=\s*transmitterAxisFromEEPROM\(CH_YAW\)", flight)
-        and require(r"if \(yawStick != 0\).*heading_lock_active = false", flight, re.S),
+        and require(r"ch\[i\]\s*=\s*calibrateReceiverPulse\(i, raw\[i\]\)", flight)
+        and require(r"rollStick\s*=\s*stickAxisFromPulse\(ch\[0\]\)", flight)
+        and require(r"pitchStick\s*=\s*stickAxisFromPulse\(ch\[1\]\)", flight)
+        and require(r"yawStick\s*=\s*stickAxisFromPulseWithDeadband\(ch\[3\], YAW_STICK_DEADBAND_US\)", flight)
+        and require(r"yaw_cmd = \(\(float\)yawStick / 500\.0f\) \* MAX_YAW_RATE_DPS", flight),
     )
     ok &= check(
-        "flight battery SOC uses 3.70V empty scale",
-        require(r"BATTERY_PERCENT_EMPTY_V\s+3\.70f", flight)
-        and require(r"monitorVoltage\s*-\s*BATTERY_PERCENT_EMPTY_V", flight),
+        "flight heading hold yields to transmitter yaw",
+        require(r"if \(yawStick != 0\).*clearHeadingLock\(\)", flight, re.S)
+        and require(r"updateHeadingHoldFromYawStick\(yawStick\)", flight),
     )
     ok &= check(
-        "flight battery alarm defaults are 20/9/0",
-        require(r"BATTERY_DEFAULT_LOW_PERCENT\s+20\.0f", flight)
-        and require(r"BATTERY_DEFAULT_CRITICAL_PERCENT\s+9\.0f", flight)
-        and require(r"BATTERY_DEFAULT_EMERGENCY_PERCENT\s+0\.0f", flight),
+        "flight heading hold uses proportional drift correction",
+        require(r"HEADING_HOLD_P_GAIN\s+1\.60f", flight)
+        and require(r"HEADING_HOLD_DEADBAND_DEG\s+3\.0f", flight)
+        and require(r"HEADING_HOLD_SOFT_ZONE_DEG", flight)
+        and require(r"heading_deviation \+= headingStep", flight)
+        and require(r"heading_error = -heading_deviation", flight)
+        and require(r"yaw_cmd = headingHoldRateFromError\(heading_error\)", flight)
+        and "HEADING_STEP_DEG" not in flight,
+    )
+    ok &= check(
+        "flight telemetry emits v2.6 JSON control state",
+        require(r"void printTelemetryJson", flight)
+        and all(token in flight for token in (
+            'Serial.print(F("{\\"ms\\":"));',
+            'Serial.print(F(",\\"headLock\\":"));',
+            'Serial.print(F(",\\"pidRollP\\":"));',
+            'Serial.print(F(",\\"mFL\\":"));',
+        )),
+    )
+    ok &= check(
+        "flight v2.6 has no onboard battery monitor",
+        "BATTERY_PERCENT_EMPTY_V" not in flight
+        and "BATTERY_DEFAULT_LOW_PERCENT" not in flight
+        and "\"battery" not in flight,
     )
 
     for py_file in py_files:

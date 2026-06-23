@@ -171,14 +171,18 @@ python tools\self_check.py
 Compile both Arduino sketches when Arduino CLI is available:
 
 ```powershell
-tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno firmware\flight_controller\controller_firmware_v2.6.1
+$sketch = "$env:TEMP\controller_firmware_v2.6"
+Remove-Item -Recurse -Force $sketch -ErrorAction SilentlyContinue
+New-Item -ItemType Directory $sketch | Out-Null
+Copy-Item firmware\flight_controller\controller_firmware_v2.6.ino "$sketch\controller_firmware_v2.6.ino"
+tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno $sketch
 tools\arduino-cli\arduino-cli.exe --config-file tools\arduino-cli\arduino-cli.yaml compile --fqbn arduino:avr:uno firmware\calibration_wizard\CalibrationWizard
 ```
 
 Last local verification:
 
-- Flight controller `controller_firmware_v2.6.1.ino`: `30950` bytes flash,
-  `1136` bytes RAM.
+- Flight controller `controller_firmware_v2.6.ino`: `25082` bytes flash,
+  `790` bytes RAM.
 - Calibration wizard `CalibrationWizard.ino`: `22172` bytes flash,
   `595` bytes RAM.
 

@@ -18,8 +18,8 @@ let live = true;
 let sessionStart = Date.now();
 let pidEdit = false;
 let pidValues = {
-  roll: { kp: 0.450, ki: 0.000, kd: 0.010 },
-  pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
+  roll: { kp: 2.000, ki: 0.010, kd: 0.030 },
+  pitch: { kp: 2.000, ki: 0.010, kd: 0.030 },
   yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
 };
 let pendingPidValues = null;
@@ -1139,8 +1139,8 @@ function setupControls() {
   qs("resetPid").onclick = async () => {
     if (!confirm("Reset all PID gains to factory defaults? This will send new values to the UAV.")) return;
     const defaults = {
-      roll: { kp: 0.450, ki: 0.000, kd: 0.010 },
-      pitch: { kp: 0.450, ki: 0.000, kd: 0.010 },
+      roll: { kp: 2.000, ki: 0.010, kd: 0.030 },
+      pitch: { kp: 2.000, ki: 0.010, kd: 0.030 },
       yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
     };
     const result = await postJson("/api/pid", defaults);

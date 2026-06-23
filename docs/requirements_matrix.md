@@ -6,16 +6,15 @@ Source: project prompt supplied during development.
 
 | Requirement | Implementation |
 |---|---|
-| Arduino Uno / ATmega328P C++ with `Wire.h`, `EEPROM.h`, and `Servo.h` behavior through timed ESC pulses | `firmware/flight_controller/controller_firmware_v2.6.1/controller_firmware_v2.6.1.ino` |
+| Arduino Uno / ATmega328P C++ with `Wire.h`, `EEPROM.h`, and timed ESC pulses | `firmware/flight_controller/controller_firmware_v2.6.ino` |
 | Motor pins D6/D9/D10/D11 and current X-frame equations | `mixMotors()` |
-| 250 Hz ESC/control loop with lower-rate compass, barometer, battery, and telemetry tasks | `LOOP_TIME_US`, `COMPASS_UPDATE_INTERVAL_MS`, `BARO_UPDATE_INTERVAL_MS`, `BATTERY_SAMPLE_INTERVAL_MS`, `TELEMETRY_INTERVAL_MS`, `loop()` |
+| 250 Hz ESC/control loop with lower-rate compass, battery, and telemetry tasks | `LOOP_TIME_US`, `COMPASS_UPDATE_INTERVAL_MS`, `BATTERY_SAMPLE_INTERVAL_MS`, `TELEMETRY_INTERVAL_MS`, `loop()` |
 | Complementary roll/pitch filter with MPU roll/pitch axis swap for current board orientation | `updateAngles()`, `SWAP_ROLL_PITCH_AXES` |
-| Compass heading readout and heading-hold/command state machine | `updateCompass()`, `updateHeadingHoldFromYawStick()` |
-| Manual rate PID with unrestricted PID tuning | `calculate_pid()`, `handlePidCommand()` |
+| Roll/pitch attitude hold and stepwise yaw heading hold | `calculate_pid()`, `updateHeadingHoldFromYawStick()`, `startHeadingCorrectionStep()`, `handlePidCommand()` |
 | RC capture, normalization, deadbands, arming/disarming holds | `processRxEdge()`, `copyAndCalibrateReceiver()`, `check_safety_and_arming()` |
 | Failsafe on RC loss, sensor health, CH6 physical lockout, and battery emergency/invalid state | `check_safety_and_arming()`, `emergencyLockoutActive`, `batteryFailsafeActive` |
-| Serial telemetry and command handling | `printTelemetryJson()`, `handleTelemetry()`, `handleSerialTuning()` |
-| BMP280/BME280 telemetry without altitude-hold control | `setupBarometer()`, `updateBarometer()`, `printTelemetryJson()` |
+| Serial telemetry and command handling | `printTelemetryJson()`, `handleTelemetry()`, `handleSerialCommands()` |
+| Optional barometer code kept out of the active core flight sketch | Flight firmware includes compact QMC5883P heading hold but omits BMP280/BME280 telemetry; Calibration Wizard still handles compass/barometer setup data |
 
 ## Part H: Intelligent Battery Monitoring
 
@@ -24,9 +23,8 @@ Source: project prompt supplied during development.
 | 0-5V stepped-down monitor signal on A0 | `updateBatteryMonitor()` |
 | A0 monitor voltage, 3.70V-to-5.00V battery percentage, alarm thresholds | `BatteryState`, threshold constants, `estimateBatterySoc()`, `handleBatteryCommand()` |
 | Alarm levels LOW/CRITICAL/EMERGENCY | `classifyBatteryAlarm()` |
-| Telemetry fields for Pi dashboard | `printTelemetryJson()` emits battery fields plus `baroOK`, `baroStatus`, `baroPressurePa`, `baroTempC`, `baroAltitudeM`, and `baroRelativeAltitudeM` |
+| Telemetry fields for Pi dashboard | `printTelemetryJson()` emits battery, receiver, attitude, command, PID, motor, and state fields |
 | Pi parser and dashboard battery panel | `dashboard/app/telemetry.py`, `dashboard/app/static/js/dashboard.js` |
-| Pi parser and dashboard barometer panel/graph | `dashboard/app/telemetry.py`, `dashboard/app/templates/dashboard.html`, `dashboard/app/static/js/dashboard.js` |
 
 ## Part I: Calibration Wizard
 

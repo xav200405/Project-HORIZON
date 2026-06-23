@@ -4,7 +4,7 @@ This folder contains the active Arduino source for the TP-ARC flight system.
 
 ## Folders
 
-- `flight_controller/controller_firmware_v2.6.1/` - flight firmware for
+- `flight_controller/controller_firmware_v2.6.ino` - flight firmware for
   stabilization, RC input, telemetry, failsafe, arming, and motor output.
 - `calibration_wizard/CalibrationWizard/` - serial calibration sketch for IMU, compass,
   barometer, RC, ESC, and EEPROM persistence.

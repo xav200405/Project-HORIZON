@@ -15,7 +15,7 @@ between active source, deployable artifacts, documentation, and tools.
 ## Source of Truth
 
 - RMS development source: `dashboard/`
-- Flight firmware source: `firmware/flight_controller/controller_firmware_v2.6.1/`
+- Flight firmware source: `firmware/flight_controller/controller_firmware_v2.6.ino`
 - Calibration wizard source: `firmware/calibration_wizard/CalibrationWizard/`
 - Pi one-file RMS launcher: `dashboard/deploy/raspberry_pi/TP_ARC_RMS_single.py`
 

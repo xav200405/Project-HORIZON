@@ -16,5 +16,5 @@ python dashboard/run.py
 
 The Arduino firmware is not run with Python. Open or compile these sketches:
 
-- `firmware/flight_controller/controller_firmware/controller_firmware.ino`
+- `firmware/flight_controller/controller_firmware_v2.6.ino`
 - `firmware/calibration_wizard/CalibrationWizard/CalibrationWizard.ino`

@@ -14,7 +14,7 @@ Aviation Research Centre.
 Current flight controller firmware identity:
 
 - Version: `FC-0.8.7`
-- Revision: `2026-06-23.7`
+- Revision: `2026-06-23.12`
 
 Current RMS package identity:
 
@@ -27,13 +27,11 @@ Current RMS package identity:
 - `BATTERY_MONITOR_ENABLED = true` in the flight controller for the verified A0 stepped-down monitor signal.
 - Battery telemetry now reports A0 monitor voltage, percentage where 3.70V is 0% and 5.00V is 100%, alarm level, validity, scale endpoints, and active percentage thresholds. Invalid or emergency battery readings trigger a failsafe disarm latch.
 - Default battery alarms are now low at 20% SOC, critical at 9% SOC, and emergency at 0% SOC. The dashboard also sounds a repeated battery alarm at low and critical levels.
-- Barometer telemetry is active for BMP280/BME280 at `0x76`: pressure, temperature, absolute altitude estimate, relative altitude, raw readings, status, and chip ID are emitted to the RMS. Altitude hold remains intentionally disabled.
+- Flight firmware is still a smaller core stabilizer build. QMC5883P heading hold is back in a compact, nonfatal form; BMP280/BME280 barometer telemetry remains out of the active flight sketch to keep the control loop lean.
 - Dashboard PID tuning now sends all Roll/Pitch/Yaw gain terms as a full `PID:` serial command. Firmware applies the values live without PID gain range rejection, resets PID integrators, and replies with `ACK:PID,...`.
-- Manual roll/pitch/yaw use priority rate-command control: EEPROM-calibrated stick displacement maps linearly to `deg/s` setpoints, then PID tracks gyro rate. When roll or pitch sticks return to center, the command source automatically falls back to self-level rate commands derived from attitude angle.
-- Flight firmware now uses an explicit control arbitration function before PID runs and emits `rollSrc`, `pitchSrc`, and `yawSrc` telemetry so transmitter/self-level/heading-hold authority can be verified from RMS data.
-- Transmitter roll/pitch/yaw have first priority over automated behavior. Centered-axis control, yaw arm/disarm extremes, and heading-hold release are computed from the EEPROM receiver center/min/max and direction data instead of fixed `1500 us` assumptions.
+- Flight firmware restored the more stable roll/pitch angle self-level controller: EEPROM-calibrated stick displacement maps to target angle, centered sticks command level attitude, and bounded PID output drives motor mixing.
+- Yaw remains transmitter-priority rate command. When yaw is centered and the compass is healthy, heading hold captures the release heading and corrects in an action-stop-check loop: command a small heading step, stop yaw, let the compass settle, then re-check the remaining error. If the compass is missing/bad, yaw falls back to zero-rate damping.
 - Roll/pitch IMU axes are swapped in firmware for the current board orientation, so physical roll and physical pitch are reported and controlled under the correct names.
-- `COMPASS_REQUIRED_TO_ARM = false` so compass bring-up issues do not silently block arming; missing compass data falls back to yaw-rate command mode.
 - Failed pre-arm attempts now print `EVT:ARM_DENIED,...` diagnostics to the serial monitor.
 - Flight controller and Calibration Wizard both use the archived PCB receiver map: CH1 roll D7, CH2 pitch D8, CH3 throttle D5, CH4 yaw D4.
 - Calibration Wizard RC setup now checks CH1-CH4 receiver health, captures neutral/safe positions, verifies stick directions one by one, and refuses to commit weak endpoint captures.
@@ -51,23 +49,23 @@ Passing:
 
 - `tools/self_check.py`
 - Python syntax checks included in `tools/self_check.py`
-- Static validation for motor mixing, control loop timing, PID anti-windup, battery telemetry, dashboard behavior, Calibration Wizard v4 behavior, and HW-127/QMC5883P compass naming/register constants, archived init sequence, and zero-read diagnostics
-- Static validation for active battery monitoring, gated battery failsafe, configurable compass arming, and serial arm-denied diagnostics
+- Static validation for motor mixing, control loop timing, PID anti-windup, heading hold, battery telemetry, dashboard behavior, and Calibration Wizard v4 behavior
+- Static validation for active battery monitoring and gated battery failsafe
 - Static validation for archived RC pin mapping and throttle capture from D5
 - Static validation for D13 status LED behavior in flight and calibration sketches
 - Static validation for archived-style arming/disarming thresholds, `150 ms` holds, and re-arm neutral latch
-- Static validation for flight firmware version/revision boot, telemetry fields, and barometer parser/dashboard behavior
+- Static validation for flight firmware version/revision boot, core telemetry fields, and dashboard parser behavior
 
 Arduino compilation:
 
 - Arduino CLI `1.5.1` was installed locally under `tools/arduino-cli/`.
 - Arduino AVR core `1.8.8` and Servo library `1.3.0` were installed locally.
-- Flight controller compile passed for `arduino:avr:uno`: `30950` bytes flash, `1136` bytes RAM.
+- Flight controller compile passed for `arduino:avr:uno`: `26460` bytes flash, `1081` bytes RAM.
 - Calibration Wizard v4 compile passed for `arduino:avr:uno`: `22172` bytes flash, `595` bytes RAM.
 
 ## Archived-code transplant
 
-The current flight controller and Calibration Wizard v4 now use the archived working QMC5883P compass guts:
+The Calibration Wizard v4 still uses the archived working QMC5883P compass guts for setup/calibration workflows:
 
 - Fixed HW-127 compass address path at `0x2C` with fallback probe retained only for board detection.
 - QMC5883P chip ID read from register `0x00`, expected `0x80`.

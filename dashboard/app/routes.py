@@ -156,7 +156,7 @@ def pid():
         values = {axis: dict(legacy) for axis in axes}
 
     for axis_values in values.values():
-        if not (0 <= axis_values["kp"] <= 1 and 0 <= axis_values["ki"] <= 0.5 and 0 <= axis_values["kd"] <= 0.5):
+        if not (0 <= axis_values["kp"] <= 10 and 0 <= axis_values["ki"] <= 1 and 0 <= axis_values["kd"] <= 50):
             return {"error": "range"}, 400
 
     command = (

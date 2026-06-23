@@ -18,8 +18,8 @@ let live = true;
 let sessionStart = Date.now();
 let pidEdit = false;
 let pidValues = {
-  roll: { kp: 0.180, ki: 0.010, kd: 0.000 },
-  pitch: { kp: 0.200, ki: 0.030, kd: 0.050 },
+  roll: { kp: 4.000, ki: 0.020, kd: 0.050 },
+  pitch: { kp: 4.000, ki: 0.020, kd: 0.050 },
   yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
 };
 let lastAnalysis = null;
@@ -45,6 +45,7 @@ const BATTERY_SIGNAL_PRESENT_MIN_VOLTAGE = 0.05;
 const BATTERY_LOW_SOC_PERCENT = 20;
 const BATTERY_CRITICAL_SOC_PERCENT = 9;
 const BATTERY_EMERGENCY_SOC_PERCENT = 0;
+const PID_LIMITS = { kp: 10, ki: 1, kd: 50 };
 
 const tabs = {
   Power: [["battery_soc", "Battery %"], ["battery_voltage", "A0 V"]],
@@ -1060,9 +1061,9 @@ function renderPidGrid() {
 function pidValuesInRange(values) {
   return ["roll", "pitch", "yaw"].every(axis => {
     const item = values[axis] || {};
-    return item.kp >= 0 && item.kp <= 1 &&
-      item.ki >= 0 && item.ki <= 0.5 &&
-      item.kd >= 0 && item.kd <= 0.5;
+    return item.kp >= 0 && item.kp <= PID_LIMITS.kp &&
+      item.ki >= 0 && item.ki <= PID_LIMITS.ki &&
+      item.kd >= 0 && item.kd <= PID_LIMITS.kd;
   });
 }
 
@@ -1095,8 +1096,8 @@ function setupControls() {
   qs("resetPid").onclick = async () => {
     if (!confirm("Reset all PID gains to factory defaults? This will send new values to the UAV.")) return;
     const defaults = {
-      roll: { kp: 0.180, ki: 0.010, kd: 0.000 },
-      pitch: { kp: 0.200, ki: 0.030, kd: 0.050 },
+      roll: { kp: 4.000, ki: 0.020, kd: 0.050 },
+      pitch: { kp: 4.000, ki: 0.020, kd: 0.050 },
       yaw: { kp: 0.500, ki: 0.000, kd: 0.000 },
     };
     await postJson("/api/pid", defaults);

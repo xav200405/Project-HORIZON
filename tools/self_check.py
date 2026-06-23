@@ -120,7 +120,7 @@ def main():
         ("chart distinguishes empty tab from no telemetry", r"Telemetry received; no .* samples in this window"),
         ("API fallback allows changed stable-timestamp telemetry", r"lastFallbackSignature"),
         ("downsampling", r"function downsample"),
-        ("PID range validation", r"item\.kp >= 0.*item\.kp <= 1.*item\.ki >= 0.*item\.ki <= 0\.5.*item\.kd >= 0.*item\.kd <= 0\.5", re.S),
+        ("PID range validation", r"item\.kp >= 0.*item\.kp <= PID_LIMITS\.kp.*item\.ki >= 0.*item\.ki <= PID_LIMITS\.ki.*item\.kd >= 0.*item\.kd <= PID_LIMITS\.kd", re.S),
         ("PID UI sends axis-specific gains", r"data-pid-axis"),
         ("kill confirmation dialog", r"confirmKill"),
         ("RMS kill UI disabled state", r"RMS kill not commissioned"),
@@ -145,6 +145,13 @@ def main():
         ok &= check(name, require(pattern, dashboard_text, flags[0] if flags else 0))
 
     ok &= check("flight handles full PID command", require(r"void handlePidCommand", flight) and require(r"ACK:PID,KPR=", flight))
+    ok &= check(
+        "flight PID command range matches live tuning range",
+        require(r"PID_P_GAIN_MAX\s+10\.0f", flight)
+        and require(r"PID_I_GAIN_MAX\s+1\.0f", flight)
+        and require(r"PID_D_GAIN_MAX\s+50\.0f", flight)
+        and require(r"pidCommandValuesValid.*PID_P_GAIN_MAX.*PID_I_GAIN_MAX.*PID_D_GAIN_MAX", flight, re.S),
+    )
     ok &= check(
         "flight battery SOC uses 3.70V empty scale",
         require(r"BATTERY_PERCENT_EMPTY_V\s+3\.70f", flight)

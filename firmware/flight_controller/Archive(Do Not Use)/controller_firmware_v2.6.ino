@@ -1,59 +1,3 @@
-/*
-  YMFC Flight Controller - Arduino Uno Safety Baseline V6.6C_QMC5883P_COMPASS
-  =================================================================
-
-  Purpose:
-  - Fills the missing gaps from the provided skeleton:
-      * Receiver pin-change interrupt reader
-      * Latest PCB receiver mapping
-      * ESC pulse output at 250 Hz
-      * CH6 emergency lockout
-      * CH5 Bench/Test/Normal caps
-      * Basic MPU6050 roll/pitch self-level stabilization
-      * Basic yaw-rate damping
-      * Compass readout and optional heading hold
-      * PID logic
-      * Motor mixing for latest motor layout
-      * EEPROM calibration loading from ARC Setup Module v6.5 with safe defaults
-      * Receiver failsafe
-      * LED status patterns
-      * 5-second telemetry
-
-  IMPORTANT SAFETY NOTES:
-  - Test with props removed first.
-  - This is a baseline stabilizer, not a final flight tune.
-  - Barometer altitude hold is intentionally not included here.
-  - If the UAV corrects in the wrong direction, stop immediately and flip the relevant sign
-    constants in the CONFIGURABLE AXIS/MIXER SIGNS section.
-  - If the compass fails, the controller does NOT cut motors and does NOT disarm.
-    It disables heading hold, continues normal yaw-rate behavior, and reports a warning to WMS.
-  - V6.6C reads QMC5883P data from registers 0x01..0x06; register 0x00 is chip ID 0x80.
-  - This version reads the exact EEPROM layout written by the setup sketch you uploaded.
-
-  Latest receiver PCB map:
-    CH1 Roll     = D7
-    CH2 Pitch    = D8
-    CH3 Throttle = D5
-    CH4 Yaw      = D4
-    CH5 Mode     = D3
-    CH6 Lockout  = D12
-
-  ESC outputs:
-    M1 = D6
-    M2 = D9
-    M3 = D10
-    M4 = D11
-
-  Latest physical motor layout used in this file:
-    M1 = Front Right
-    M4 = Front Left
-    M2 = Rear Right
-    M3 = Rear Left
-
-  Serial:
-    57600 baud
-*/
-
 #include <Wire.h>
 #include <EEPROM.h>
 #include <math.h>
@@ -305,17 +249,17 @@ uint32_t lastImuMicros = 0;
 
 // PID gains.
 // Start conservative. Tune with props removed / cage testing first.
-float pid_p_gain_roll = 0.18f;
-float pid_i_gain_roll = 0.01f;
-float pid_d_gain_roll = 0.00f;
+float pid_p_gain_roll = 1.00f; //Change from 0.18 to 1.00
+float pid_i_gain_roll = 0.045f;
+float pid_d_gain_roll = 0.12f;
 
-float pid_p_gain_pitch = 0.20f;
-float pid_i_gain_pitch = 0.03f;
-float pid_d_gain_pitch = 0.05f;
+float pid_p_gain_pitch = 1.00f; //Change from 0.20 to 1.00
+float pid_i_gain_pitch = 0.045f;
+float pid_d_gain_pitch = 0.15f;
 
 float pid_p_gain_yaw = 1.10f;
 float pid_i_gain_yaw = 0.045f;
-float pid_d_gain_yaw = 0.020f;
+float pid_d_gain_yaw = 0.025f;
 
 float pid_i_mem_roll = 0.0f;
 float pid_i_mem_pitch = 0.0f;
